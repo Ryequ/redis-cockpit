@@ -1,5 +1,12 @@
 # redis-cockpit
 
+> [!WARNING]
+> **重要声明 / Important Notice**
+>
+> **本项目仅用于本人娱乐、学习和个人测试，不面向生产环境，不提供任何稳定性、安全性或兼容性保证。请勿在重要业务系统、生产数据或不可恢复的数据上使用。**
+>
+> **This project is strictly for personal entertainment, learning and testing only. It is not intended for production use and comes with no stability, security or compatibility guarantees. Do not use it with critical systems, production data or irrecoverable data.**
+
 一个在终端中操作 Redis 的 TUI 工具，支持键盘优先操作和鼠标选择，覆盖数据浏览、命令执行、运维监控、Pub/Sub、MONITOR、脚本与事务等能力。
 
 ## 功能
@@ -60,7 +67,9 @@ go build -o bin/redis-cockpit.exe .
 
 首次启动时若配置文件不存在，会使用默认 `local` 连接档案（`127.0.0.1:6379`）。
 
-完整示例见 `config.example.yaml`。密码字段支持环境变量占位符，例如：
+完整示例见 `config.example.yaml`。`language` 支持 `zh` / `en`，`theme` 支持 `aurora` / `ember` / `ocean` / `graphite`，也可以在 TUI 的 Settings 页面切换。
+
+密码字段支持环境变量占位符，例如：
 
 ```yaml
 password: ${REDIS_TUI_PASSWORD}
@@ -117,23 +126,33 @@ Cluster 实例将 `cluster` 设为 `true`；Sentinel 实例将 `sentinel` 设为
 
 SSH 隧道通过本机 `ssh` 命令建立本地端口转发，当前支持 SSH agent 或 `ssh_key_path` 指定的私钥认证，不支持交互式密码输入。云 Redis 模板可在连接表单中点击 `[AWS]` / `[GCP]` / `[Azure]` / `[Aliyun]` / `[Tencent]` 快速设置 TLS、云厂商和认证方式字段；`iam` 等云 token 需要由外部工具生成后填入 password 字段，当前版本不内置 token 生成。
 
+### Settings 页面
+
+按 `6` 或 `?` 进入 Settings 页面：
+
+- 语言：点击 `[中文]` 或 `[English]` 切换界面语言
+- 主题：点击 `[Aurora]` / `[Ember]` / `[Ocean]` / `[Graphite]` 切换主题色
+- 帮助：Settings 页面内置快捷键说明，顶部标签栏不再显示 `[Help]`
+
+语言与主题会保存到配置文件，下次启动自动生效。
+
 ## 快捷键
 
 | 按键 | 功能 |
 | --- | --- |
-| `1` - `5` | 切换 Connections / Keys / Workbench / Ops / Streams |
+| `1` - `6` | 切换 Connections / Keys / Workbench / Ops / Streams / Settings |
 | `Tab` / `Shift+Tab` | 循环切换视图 |
 | `↑` / `↓` 或 `k` / `j` | 移动选择 |
 | `Enter` | 连接、查看值、执行命令、确认 |
 | `Esc` | 清除输入、关闭弹层、取消确认 |
-| `?` | 显示帮助 |
+| `?` | 打开 Settings 页面查看帮助 |
 | `Ctrl+C` / `Ctrl+Q` | 退出 |
 | `/` | 在 Keys 视图编辑筛选条件 |
 | `r` | 刷新 Keys 或 Ops 快照 |
 | `n` | 加载下一页 Key |
 | `a` | 新增 Key；可输入 Key 名称和可选初始值，创建后自动选中新 Key |
-| `v` | 修改所选 String Key 的 Value |
-| `d` | 删除选中的 Key（需确认） |
+| `v` | 修改所选 String Key 的 Value（需二次确认） |
+| `d` | 删除选中的 Key（需二次确认） |
 | `t` | 在平铺列表和前缀树视图之间切换 |
 | `←` / `→` | 树视图中折叠 / 展开所选 Key 的父节点 |
 | `PgUp` / `PgDn` | 滚动 Key 列表或树 |

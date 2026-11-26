@@ -41,7 +41,7 @@ func (f profileIOForm) View() string {
 		"",
 		"Path: " + f.pathInput.View(),
 		"",
-		"[OK]  [Cancel]",
+		buttonRow("[OK]", "[Cancel]"),
 		"Enter 确认  •  Esc 取消",
 	}, "\n")
 }
@@ -273,8 +273,8 @@ func (f profileForm) View() string {
 	lines := []string{
 		title,
 		"",
-		"Templates: [AWS] [GCP] [Azure] [Aliyun] [Tencent]",
-		"[Save]  [Cancel]",
+		styleButtons("Templates: [AWS] [GCP] [Azure] [Aliyun] [Tencent]"),
+		buttonRow("[Save]", "[Cancel]"),
 		"",
 	}
 	for i, label := range f.labels {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -173,6 +175,40 @@ func deleteKeysCmd(manager *adapters.Manager, keys []string, gen uint64) tea.Cmd
 		deleted, err := manager.DeleteKeys(ctx, keys)
 		return keysDeletedMsg{gen: gen, keys: keys, deleted: deleted, err: err}
 	}
+}
+
+type valueCopiedMsg struct {
+	gen uint64
+	err error
+}
+
+func copyValueCmd(value string, gen uint64) tea.Cmd {
+	return func() tea.Msg {
+		cmd := clipboardCommand(value)
+		if cmd == nil {
+			return valueCopiedMsg{gen: gen, err: errors.New("clipboard command not available")}
+		}
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			return valueCopiedMsg{gen: gen, err: fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))}
+		}
+		return valueCopiedMsg{gen: gen}
+	}
+}
+
+func clipboardCommand(value string) *exec.Cmd {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("clip")
+	case "darwin":
+		cmd = exec.Command("pbcopy")
+	default:
+		cmd = exec.Command("xclip", "-selection", "clipboard")
+	}
+	cmd.Stdin = strings.NewReader(value)
+	return cmd
 }
 
 type keyWrittenMsg struct {

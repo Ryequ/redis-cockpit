@@ -82,13 +82,18 @@ func TestKeysViewDeleteRequiresConfirmation(t *testing.T) {
 		t.Fatal("delete key should not execute before confirmation")
 	}
 	confirming := next.(Model)
-	if !strings.Contains(confirming.View(), "Confirm delete") {
+	if !strings.Contains(confirming.View(), "Delete key?") {
 		t.Fatalf("view does not show delete confirmation:\n%s", confirming.View())
 	}
 
 	next, cmd = confirming.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if cmd != nil {
+		t.Fatal("first confirmation must not delete the key")
+	}
+	second := next.(Model)
+	next, cmd = second.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	if cmd == nil {
-		t.Fatal("confirming delete returned nil command")
+		t.Fatal("second confirmation did not delete the key")
 	}
 	next, refreshCmd := next.Update(cmd())
 	if refreshCmd != nil {

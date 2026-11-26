@@ -13,7 +13,10 @@ import (
 
 func clickTokenMsg(t *testing.T, m Model, token string) tea.MouseMsg {
 	t.Helper()
-	x, y, ok := locateToken(m.View(), token)
+	x, y, ok := locateToken(m.View(), m.btnLabel(token))
+	if !ok {
+		x, y, ok = locateToken(m.View(), token)
+	}
 	if !ok {
 		t.Fatalf("token %q not found in view", token)
 	}
@@ -204,7 +207,12 @@ func TestMouseClickYesConfirmsDelete(t *testing.T) {
 	m.setView(ViewKeys)
 	m.pendingDelete = []string{"sample:key"}
 
-	next, _ := m.Update(clickTokenMsg(t, m, "[Y] Delete"))
+	next, _ := m.Update(clickTokenMsg(t, m, "[Confirm]"))
+	first := next.(Model)
+	if first.deleteConfirmStage != 1 {
+		t.Fatal("delete confirmation did not advance to second stage")
+	}
+	next, _ = first.Update(clickTokenMsg(t, first, "[Y] Delete"))
 	got := next.(Model)
 	if got.pendingDelete != nil {
 		t.Fatal("delete confirmation was not cleared")
@@ -216,7 +224,7 @@ func TestMouseClickNoCancelsDelete(t *testing.T) {
 	m.setView(ViewKeys)
 	m.pendingDelete = []string{"sample:key"}
 
-	next, _ := m.Update(clickTokenMsg(t, m, "[N] Cancel"))
+	next, _ := m.Update(clickTokenMsg(t, m, "[Cancel]"))
 	got := next.(Model)
 	if got.pendingDelete != nil {
 		t.Fatal("delete confirmation was not cancelled")

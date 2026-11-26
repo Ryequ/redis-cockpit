@@ -55,6 +55,11 @@ func TestMouseClickEditValueButtonOpensForm(t *testing.T) {
 	m.selectedValue = result.Normalize("hello")
 
 	next, _ := m.Update(clickTokenMsg(t, m, "[Edit value]"))
+	confirming := next.(Model)
+	if confirming.pendingEditConfirm != "greeting" {
+		t.Fatalf("edit confirmation = %q, want greeting", confirming.pendingEditConfirm)
+	}
+	next, _ = confirming.Update(clickTokenMsg(t, confirming, "[Confirm]"))
 	got := next.(Model)
 	if got.keyForm == nil || got.keyForm.mode != keyFormEditValue {
 		t.Fatalf("key form = %#v, want edit form", got.keyForm)
@@ -105,6 +110,8 @@ func TestEditKeyValueOpensFormWithCurrentValue(t *testing.T) {
 	m.selectedValue = result.Normalize("hello")
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	confirming := next.(Model)
+	next, _ = confirming.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	got := next.(Model)
 	if got.keyForm == nil || got.keyForm.mode != keyFormEditValue {
 		t.Fatalf("key form = %#v, want edit value form", got.keyForm)
@@ -120,6 +127,8 @@ func TestEditKeyValueWritesRedis(t *testing.T) {
 	m.selectedValue = result.Normalize("hello")
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	confirming := next.(Model)
+	next, _ = confirming.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = next.(Model)
 	m.keyForm.inputs[keyFieldValue].SetValue("world")
 
