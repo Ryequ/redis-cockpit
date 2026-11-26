@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Ryequ/redis-cockpit/internal/redis"
 	"gopkg.in/yaml.v3"
@@ -85,6 +86,50 @@ func Save(path string, cfg Config) error {
 		return fmt.Errorf("write config %s: %w", path, err)
 	}
 	return nil
+}
+
+func CloneProfile(profile redis.ConnectionProfile, name string) (redis.ConnectionProfile, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return redis.ConnectionProfile{}, fmt.Errorf("clone name is required")
+	}
+	clone := profile
+	clone.ID = name
+	clone.Name = name
+	if err := clone.Validate(); err != nil {
+		return redis.ConnectionProfile{}, err
+	}
+	return clone, nil
+}
+
+func ExportProfiles(path string, cfg Config) error {
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("export file already exists: %s", path)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return Save(path, Config{
+		ActiveProfile: cfg.ActiveProfile,
+		PageSize:      cfg.PageSize,
+		MaxPreview:    cfg.MaxPreview,
+		Profiles:      cfg.Profiles,
+	})
+}
+
+func ImportProfiles(path string) ([]redis.ConnectionProfile, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		return nil, err
+	}
+	for _, profile := range cfg.Profiles {
+		if err := profile.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid profile %q: %w", profile.Name, err)
+		}
+	}
+	return cfg.Profiles, nil
 }
 
 func (c Config) FindProfile(name string) (redis.ConnectionProfile, bool) {

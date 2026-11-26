@@ -54,11 +54,23 @@ type Model struct {
 	cfg                  config.Config
 	configPath           string
 	profileForm          *profileForm
+	profileIOForm        *profileIOForm
 	pendingProfileDelete string
 	readOnly             bool
 	policy               security.Policy
 	selectedProfile      int
+	profileSearch        textinput.Model
+	profileSearchMode    bool
+	profileSort          profileSortKey
+	profileGroupByMode   bool
+	profileHealth        map[string]ProfileHealth
+	profileGeneration    uint64
+	batchTestTotal       int
+	batchTestDone        int
+	batchTestOK          int
+	batchTestFail        int
 	client               goredis.UniversalClient
+	connectionClose      func() error
 	executor             *redis.Executor
 	adapter              *adapters.Manager
 	history              *command.History
@@ -103,6 +115,11 @@ func NewModelWithConfig(cfg config.Config, readOnly bool) Model {
 	filter.Prompt = "/"
 	filter.CharLimit = 256
 
+	profileSearch := textinput.New()
+	profileSearch.Placeholder = "filter profiles"
+	profileSearch.Prompt = "/"
+	profileSearch.CharLimit = 256
+
 	streamChannel := textinput.New()
 	streamChannel.Placeholder = "redis-cockpit"
 	streamChannel.Prompt = "#"
@@ -126,6 +143,8 @@ func NewModelWithConfig(cfg config.Config, readOnly bool) Model {
 		readOnly:        readOnly,
 		policy:          security.NewPolicy(readOnly),
 		selectedProfile: selected,
+		profileSearch:   profileSearch,
+		profileHealth:   make(map[string]ProfileHealth),
 		history:         command.NewHistory(100),
 		commandInput:    input,
 		filterInput:     filter,

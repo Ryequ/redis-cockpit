@@ -4,7 +4,9 @@
 
 ## 功能
 
-- 连接管理：单机、远程、Cluster、Sentinel、TLS、密码认证、只读实例。
+- 连接管理：单机、远程、Cluster、Sentinel、TLS、密码认证、只读实例、SSH 隧道和云 Redis 模板。
+- 连接页增强：搜索、排序、按模式分组、复制连接、导入/导出、健康状态、延迟和版本展示。
+- 实例摘要：Connections 页并排展示 Server、Memory、Stats 三组关键指标。
 - Key 浏览：`SCAN` 分页、类型/TTL 展示、筛选、值预览、删除确认。
 - 数据类型：String、Hash、List、Set、ZSet、Stream 的分页读取。
 - 命令工作台：命令解析、历史记录、任意 Redis 命令执行、危险命令确认。
@@ -74,12 +76,26 @@ password: ${REDIS_TUI_PASSWORD}
 | --- | --- |
 | `↑` / `↓` 或 `j` / `k` | 选择连接档案 |
 | `Enter` | 连接选中的 Redis 实例 |
+| `/` | 搜索连接档案 |
+| `o` | 切换排序方式：配置顺序 / 名称 / 地址 / 模式 |
+| `g` | 按连接模式分组 |
+| `a` | 批量测试所有连接 |
 | `n` | 新建连接档案 |
 | `e` | 编辑选中的连接档案 |
+| `c` | 复制选中的连接档案 |
+| `i` / `x` | 导入 / 导出连接档案 |
 | `d` | 删除选中的连接档案，需按 `y` 确认 |
 | `t` | 测试选中的连接 |
 
-新增和编辑使用表单，支持 `Tab` / `Shift+Tab` 切换字段、`Space` 切换 TLS / Cluster / Sentinel / 只读等开关、`Enter` 保存、`Esc` 取消。保存后会立即写入当前配置文件。
+当前选中连接使用 `▸` 标记，当前激活连接显示 `active`。连接档案测试结果会显示 `OK`、延迟和 Redis 版本。
+
+Connections 页面还会在列表下方并排显示 Server、Memory、Stats 三组摘要：
+
+- Server：Redis version、OS、PID
+- Memory：Used Memory、Used Memory Peak、Used Memory Lua
+- Stats：Connected Clients、Total Connections、Total Commands
+
+新增和编辑使用表单，支持 `Tab` / `Shift+Tab` 切换字段、`Space` 切换 TLS / Cluster / Sentinel / 只读等开关、`Enter` 保存、`Esc` 取消。表单中的字段、开关和云模板按钮均可用鼠标点击。保存后会立即写入当前配置文件。
 
 也可以直接编辑配置文件中的 `profiles` 列表。例如：
 
@@ -98,6 +114,8 @@ password: ${REDIS_TUI_PASSWORD}
 ```
 
 Cluster 实例将 `cluster` 设为 `true`；Sentinel 实例将 `sentinel` 设为 `true` 并填写 `sentinel_addrs` 与 `master_name`。两种模式不能同时开启。
+
+SSH 隧道通过本机 `ssh` 命令建立本地端口转发，当前支持 SSH agent 或 `ssh_key_path` 指定的私钥认证，不支持交互式密码输入。云 Redis 模板可在连接表单中点击 `[AWS]` / `[GCP]` / `[Azure]` / `[Aliyun]` / `[Tencent]` 快速设置 TLS、云厂商和认证方式字段；`iam` 等云 token 需要由外部工具生成后填入 password 字段，当前版本不内置 token 生成。
 
 ## 快捷键
 

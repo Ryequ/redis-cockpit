@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -93,6 +94,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleProfileDeleteConfirmation(msg)
 	}
 
+	if m.profileIOForm != nil {
+		return m.handleProfileIOFormKey(msg)
+	}
+
 	if m.profileForm != nil {
 		return m.handleProfileFormKey(msg)
 	}
@@ -141,8 +146,77 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleConnectionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.profileSearchMode {
+		switch msg.Type {
+		case tea.KeyEnter, tea.KeyEsc:
+			m.profileSearchMode = false
+			m.profileSearch.Blur()
+			m.normalizeProfileSelection()
+			m.setStatus("Profile filter updated")
+			return m, nil
+		}
+		updated, cmd := m.profileSearch.Update(msg)
+		m.profileSearch = updated
+		m.normalizeProfileSelection()
+		return m, cmd
+	}
+
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
 		switch msg.Runes[0] {
+		case '/':
+			m.profileSearchMode = true
+			return m, m.profileSearch.Focus()
+		case 'o':
+			m.profileSort = (m.profileSort + 1) % 4
+			m.normalizeProfileSelection()
+			m.setStatus("Profile sort: " + profileSortLabel(m.profileSort))
+			return m, nil
+		case 'g':
+			m.profileGroupByMode = !m.profileGroupByMode
+			m.normalizeProfileSelection()
+			m.setStatus("Profile grouping toggled")
+			return m, nil
+		case 'a':
+			cmds := make([]tea.Cmd, 0, len(m.cfg.Profiles))
+			for _, profile := range m.cfg.Profiles {
+				cmds = append(cmds, testConnectionCmd(profile, m.generation, m.profileGeneration))
+			}
+			m.batchTestTotal = len(cmds)
+			m.batchTestDone = 0
+			m.batchTestOK = 0
+			m.batchTestFail = 0
+			m.setStatus(fmt.Sprintf("Testing all %d profiles...", len(cmds)))
+			return m, tea.Batch(cmds...)
+		case 'c':
+			if len(m.cfg.Profiles) > 0 {
+				profile := m.cfg.Profiles[m.selectedProfile]
+				clone, err := config.CloneProfile(profile, uniqueProfileName(m.cfg, profile.Name))
+				if err != nil {
+					m.setStatus("Clone failed: " + err.Error())
+					return m, nil
+				}
+				if err := m.cfg.UpsertProfile(clone); err != nil {
+					m.setStatus("Clone failed: " + err.Error())
+					return m, nil
+				}
+				if err := m.saveConfig(); err != nil {
+					m.setStatus("Save failed: " + err.Error())
+					return m, nil
+				}
+				m.profileGeneration++
+				m.setStatus("Profile cloned: " + clone.Name)
+			}
+			return m, nil
+		case 'i':
+			form := newProfileIOForm(profileIOImport)
+			m.profileIOForm = &form
+			m.setStatus("Import profiles")
+			return m, nil
+		case 'x':
+			form := newProfileIOForm(profileIOExport)
+			m.profileIOForm = &form
+			m.setStatus("Export profiles")
+			return m, nil
 		case 'n':
 			form := newProfileForm(redis.ConnectionProfile{}, profileCreate)
 			m.profileForm = &form
@@ -171,7 +245,7 @@ func (m Model) handleConnectionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if len(m.cfg.Profiles) > 0 {
 				profile := m.cfg.Profiles[m.selectedProfile]
 				m.setStatus("Testing " + profile.Name + "...")
-				return m, testConnectionCmd(profile, m.generation)
+				return m, testConnectionCmd(profile, m.generation, m.profileGeneration)
 			}
 			return m, nil
 		}
@@ -194,6 +268,64 @@ func (m Model) handleConnectionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, connectCmd(profile, m.generation)
 	}
 	return m, nil
+}
+
+func (m Model) handleProfileIOFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	form := m.profileIOForm
+	if form == nil {
+		return m, nil
+	}
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.profileIOForm = nil
+		m.setStatus("Import/export cancelled")
+		return m, nil
+	case tea.KeyEnter:
+		path := strings.TrimSpace(form.pathInput.Value())
+		if path == "" {
+			m.setStatus("Path is required")
+			return m, nil
+		}
+		if form.mode == profileIOExport {
+			if err := config.ExportProfiles(path, m.cfg); err != nil {
+				m.setStatus("Export failed: " + err.Error())
+				return m, nil
+			}
+			m.profileIOForm = nil
+			m.setStatus("Profiles exported to " + path)
+			return m, nil
+		}
+
+		profiles, err := config.ImportProfiles(path)
+		if err != nil {
+			m.setStatus("Import failed: " + err.Error())
+			return m, nil
+		}
+		added := 0
+		for _, profile := range profiles {
+			if _, exists := m.cfg.FindProfile(profile.Name); exists {
+				continue
+			}
+			if profile.ID != "" {
+				if _, exists := m.cfg.FindProfile(profile.ID); exists {
+					continue
+				}
+			}
+			m.cfg.Profiles = append(m.cfg.Profiles, profile)
+			added++
+		}
+		if err := m.saveConfig(); err != nil {
+			m.setStatus("Save failed: " + err.Error())
+			return m, nil
+		}
+		m.profileIOForm = nil
+		m.profileGeneration++
+		m.setStatus(fmt.Sprintf("Imported %d profiles", added))
+		return m, nil
+	}
+	updated, cmd := form.pathInput.Update(msg)
+	form.pathInput = updated
+	return m, cmd
 }
 
 func (m Model) handleProfileFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -238,6 +370,13 @@ func (m Model) handleProfileFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Save failed: " + err.Error())
 			return m, nil
 		}
+		if form.originalName != profile.Name {
+			if health, ok := m.profileHealth[form.originalName]; ok {
+				delete(m.profileHealth, form.originalName)
+				m.profileHealth[profile.Name] = health
+			}
+		}
+		m.profileGeneration++
 		for i, existing := range m.cfg.Profiles {
 			if existing.Name == profile.Name {
 				m.selectedProfile = i
@@ -299,6 +438,8 @@ func (m Model) handleProfileDeleteConfirmation(msg tea.KeyMsg) (tea.Model, tea.C
 				m.setStatus("Save failed: " + err.Error())
 				return m, nil
 			}
+			delete(m.profileHealth, name)
+			m.profileGeneration++
 			m.setStatus("Profile deleted: " + name)
 			return m, nil
 		case 'n', 'N':
@@ -315,13 +456,44 @@ func (m Model) handleProfileDeleteConfirmation(msg tea.KeyMsg) (tea.Model, tea.C
 }
 
 func (m Model) handleProfileTested(msg profileTestedMsg) (tea.Model, tea.Cmd) {
-	if msg.gen != m.generation {
+	if msg.gen != m.generation || msg.profileGen != m.profileGeneration {
 		return m, nil
 	}
 	name := msg.name
 	if name == "" {
 		name = "connection"
 	}
+	if m.profileHealth == nil {
+		m.profileHealth = make(map[string]ProfileHealth)
+	}
+	if msg.err != nil {
+		m.profileHealth[name] = ProfileHealth{
+			Status: "FAIL", Error: msg.err.Error(), CheckedAt: time.Now(),
+		}
+	} else {
+		m.profileHealth[name] = ProfileHealth{
+			Status: "OK", Latency: msg.latency, Version: msg.version, CheckedAt: time.Now(),
+		}
+	}
+
+	if m.batchTestTotal > 0 {
+		m.batchTestDone++
+		if msg.err != nil {
+			m.batchTestFail++
+		} else {
+			m.batchTestOK++
+		}
+		m.setStatus(fmt.Sprintf("Batch test %d/%d OK=%d FAIL=%d",
+			m.batchTestDone, m.batchTestTotal, m.batchTestOK, m.batchTestFail))
+		if m.batchTestDone >= m.batchTestTotal {
+			m.batchTestTotal = 0
+			m.batchTestDone = 0
+			m.batchTestOK = 0
+			m.batchTestFail = 0
+		}
+		return m, nil
+	}
+
 	if msg.err != nil {
 		m.setStatus("Test failed for " + name + ": " + msg.err.Error())
 		return m, nil
@@ -426,7 +598,24 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.profileIOForm != nil {
+		if clickToken(msg, view, "[OK]") {
+			return m.handleProfileIOFormKey(tea.KeyMsg{Type: tea.KeyEnter})
+		}
+		if clickToken(msg, view, "[Cancel]") {
+			return m.handleProfileIOFormKey(tea.KeyMsg{Type: tea.KeyEsc})
+		}
+		return m, nil
+	}
+
 	if m.profileForm != nil {
+		for _, provider := range []string{"AWS", "GCP", "Azure", "Aliyun", "Tencent"} {
+			if clickToken(msg, view, "["+provider+"]") {
+				m.profileForm.applyCloudTemplate(provider)
+				m.setStatus("Applied " + provider + " template")
+				return m, nil
+			}
+		}
 		if clickToken(msg, view, "[Save]") {
 			return m.handleProfileFormKey(tea.KeyMsg{Type: tea.KeyEnter})
 		}
@@ -434,13 +623,13 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m.handleProfileFormKey(tea.KeyMsg{Type: tea.KeyEsc})
 		}
 		for i, label := range m.profileForm.labels {
-			if clickToken(msg, view, label+":") {
+			if clickLineContaining(msg, view, label+":") {
 				m.profileForm.setFocus(i)
 				return m, nil
 			}
 		}
 		for i, label := range m.profileForm.boolLabels {
-			if clickToken(msg, view, label+":") {
+			if clickLineContaining(msg, view, label+":") {
 				m.profileForm.setFocus(profileFieldCount + i)
 				m.profileForm.toggleBool()
 				return m, nil
@@ -476,7 +665,20 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		if m.profileSearchMode {
+			if clickLineContaining(msg, view, "Search:") {
+				return m, nil
+			}
+			return m, nil
+		}
 		switch {
+		case clickToken(msg, view, "[Search]"):
+			m.profileSearchMode = true
+			return m, m.profileSearch.Focus()
+		case clickToken(msg, view, "[Sort]"):
+			return m.handleConnectionsKey(keyFromRune('o'))
+		case clickToken(msg, view, "[Group]"):
+			return m.handleConnectionsKey(keyFromRune('g'))
 		case clickToken(msg, view, "[Connect]"):
 			return m.handleConnectionsKey(tea.KeyMsg{Type: tea.KeyEnter})
 		case clickToken(msg, view, "[N new]"):
@@ -485,8 +687,16 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m.handleConnectionsKey(keyFromRune('e'))
 		case clickToken(msg, view, "[D delete]"):
 			return m.handleConnectionsKey(keyFromRune('d'))
+		case clickToken(msg, view, "[C clone]"):
+			return m.handleConnectionsKey(keyFromRune('c'))
+		case clickToken(msg, view, "[I import]"):
+			return m.handleConnectionsKey(keyFromRune('i'))
+		case clickToken(msg, view, "[X export]"):
+			return m.handleConnectionsKey(keyFromRune('x'))
 		case clickToken(msg, view, "[T test]"):
 			return m.handleConnectionsKey(keyFromRune('t'))
+		case clickToken(msg, view, "[Test all]"):
+			return m.handleConnectionsKey(keyFromRune('a'))
 		}
 	case ViewKeys:
 		switch {
@@ -574,7 +784,9 @@ func (m Model) executeLine(line string) (tea.Model, tea.Cmd) {
 
 func (m Model) handleConnected(msg connectedMsg) (tea.Model, tea.Cmd) {
 	if msg.gen != m.generation {
-		if msg.executor != nil {
+		if msg.close != nil {
+			_ = msg.close()
+		} else if msg.executor != nil {
 			_ = msg.executor.Close()
 		}
 		return m, nil
@@ -585,6 +797,7 @@ func (m Model) handleConnected(msg connectedMsg) (tea.Model, tea.Cmd) {
 	}
 	m.closeClient()
 	m.executor = msg.executor
+	m.connectionClose = msg.close
 	m.cfg.ActiveProfile = msg.profile.Name
 	m.adapter = adapters.New(m.executor)
 	m.opsManager = ops.New(m.executor)
@@ -594,7 +807,7 @@ func (m Model) handleConnected(msg connectedMsg) (tea.Model, tea.Cmd) {
 	m.selectedValue = result.Value{}
 	m.setStatus("Connected to " + msg.profile.Name + " (" + msg.profile.Addr + ")")
 	m.setView(ViewKeys)
-	return m, m.refreshKeysCmd()
+	return m, tea.Batch(m.refreshKeysCmd(), loadOpsCmd(m.opsManager, m.generation))
 }
 
 func (m Model) handleCommandExecuted(msg commandExecutedMsg) (tea.Model, tea.Cmd) {
@@ -622,18 +835,6 @@ func (m *Model) nextView(delta int) {
 	m.setView(navItems[(current+delta+count)%count])
 }
 
-func (m *Model) selectPreviousProfile() {
-	if m.selectedProfile > 0 {
-		m.selectedProfile--
-	}
-}
-
-func (m *Model) selectNextProfile() {
-	if m.selectedProfile < len(m.cfg.Profiles)-1 {
-		m.selectedProfile++
-	}
-}
-
 func (m *Model) closeClient() {
 	m.generation++
 	if m.subscription != nil {
@@ -647,6 +848,10 @@ func (m *Model) closeClient() {
 	if m.executor != nil {
 		_ = m.executor.Close()
 		m.executor = nil
+	}
+	if m.connectionClose != nil {
+		_ = m.connectionClose()
+		m.connectionClose = nil
 	}
 
 	m.adapter = nil

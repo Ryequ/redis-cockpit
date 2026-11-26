@@ -17,6 +17,27 @@ profiles:
     read_only: false
     timeout_seconds: 5
 
+  - id: aws-ssh
+    name: aws-ssh
+    addr: 10.0.0.5:6379
+    username: default
+    password: ${REDIS_TUI_PASSWORD}
+    db: 0
+    tls: true
+    insecure_skip_verify: false
+    cluster: false
+    sentinel: false
+    sentinel_addrs: []
+    master_name: ""
+    read_only: true
+    timeout_seconds: 10
+    cloud_provider: aws
+    auth_mechanism: iam
+    ssh_host: bastion.example.com
+    ssh_port: 22
+    ssh_user: ubuntu
+    ssh_key_path: ~/.ssh/id_ed25519
+
   - id: prod
     name: prod
     addr: redis.example.com:6379
