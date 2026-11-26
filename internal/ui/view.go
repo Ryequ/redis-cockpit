@@ -23,23 +23,31 @@ const (
 
 func (m Model) View() string {
 	width := maxInt(m.width, 80)
+	header := m.renderHeader(width)
 	if m.height < 8 {
-		return lipgloss.NewStyle().Width(width).Render("Terminal too small")
+		lines := []string{header}
+		if m.height >= 2 {
+			lines = append(lines, "Terminal too small")
+		}
+		return truncateToViewport(strings.Join(lines, "\n"), maxInt(m.height, 1), width)
 	}
 	height := m.height
-
-	header := m.renderHeader(width)
 
 	left := m.renderNav()
 	center := m.renderWorkspace(width-navWidth-4, height-headerRows-footerRows-panelVerticalOverhead)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, center)
 	footer := m.renderFooter(width)
 
+	headerLineCount := len(strings.Split(header, "\n"))
+	footerLineCount := len(strings.Split(footer, "\n"))
+	bodyHeight := maxInt(height-headerLineCount-footerLineCount, 1)
+	body = truncateToViewport(body, bodyHeight, width)
+
 	screen := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 	if m.showHelpModal {
-		return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, m.renderHelpModal())
+		screen = lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, m.renderHelpModal())
 	}
-	return screen
+	return truncateToViewport(screen, height, width)
 }
 
 func (m Model) renderHeader(width int) string {
@@ -47,6 +55,7 @@ func (m Model) renderHeader(width int) string {
 	for i, view := range navItems {
 		label := fmt.Sprintf("[%d %s]", i+1, view.String())
 		if view == m.activeView {
+			label = "▸" + label
 			label = navActiveStyle.Render(label)
 		} else {
 			label = subtitleStyle.Render(label)
@@ -133,6 +142,9 @@ func truncateToViewport(body string, maxLines, maxWidth int) string {
 }
 
 func (m Model) renderConnectionsBody() string {
+	if m.profileIOForm != nil {
+		return m.profileIOForm.View()
+	}
 	if m.profileForm != nil {
 		return m.profileForm.View()
 	}
@@ -142,7 +154,9 @@ func (m Model) renderConnectionsBody() string {
 		"",
 		subtitleStyle.Render(m.workspaceHint()),
 		"",
-		subtitleStyle.Render("[Connect] [N new] [E edit] [D delete] [T test]"),
+		"Search: " + m.profileSearch.View(),
+		"",
+		subtitleStyle.Render("[Connect] [N new] [E edit] [D delete] [C clone] [I import] [X export] [T test] [Test all] [Search] [Sort] [Group]"),
 		"",
 		"Profiles:",
 	}
@@ -156,27 +170,34 @@ func (m Model) renderConnectionsBody() string {
 		), "")
 	}
 
+	visible := m.visibleProfileIndices()
 	if len(m.cfg.Profiles) == 0 {
 		lines = append(lines, warnStyle.Render("  No profiles configured"))
 	}
-	for i, profile := range m.cfg.Profiles {
+	if len(visible) == 0 && len(m.cfg.Profiles) > 0 {
+		lines = append(lines, warnStyle.Render("  No profiles match filter"))
+	}
+	lastGroup := ""
+	for _, idx := range visible {
+		profile := m.cfg.Profiles[idx]
+		group := m.profileModeKey(profile)
+		if m.profileGroupByMode && group != lastGroup {
+			lines = append(lines, subtitleStyle.Render("Group: "+group))
+			lastGroup = group
+		}
 		marker := "  "
-		if i == m.selectedProfile {
+		if idx == m.selectedProfile {
 			marker = okStyle.Render("▸ ")
 		}
-		topology := "single"
-		if profile.Cluster {
-			topology = "cluster"
-		} else if profile.Sentinel {
-			topology = "sentinel"
+		active := ""
+		if profile.Name == m.cfg.ActiveProfile || profile.ID == m.cfg.ActiveProfile {
+			active = "  active"
 		}
-		if profile.TLS {
-			topology += "+TLS"
-		}
-		lines = append(lines, fmt.Sprintf("%s%d. %s  %s  [%s]", marker, i+1, profile.Name, profile.Addr, topology))
+		lines = append(lines, fmt.Sprintf("%s%d. %s  %s  [%s]%s%s", marker, idx+1, profile.Name, profile.Addr, group, active, m.healthLabel(profile.Name)))
 	}
 
 	if len(m.cfg.Profiles) > 0 {
+		lines = append(lines, "", m.renderConnectionSummary())
 		profile := m.cfg.Profiles[m.selectedProfile]
 		lines = append(lines,
 			"",

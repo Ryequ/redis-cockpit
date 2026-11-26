@@ -10,6 +10,42 @@ import (
 	"github.com/Ryequ/redis-cockpit/internal/redis"
 )
 
+type profileIOMode int
+
+const (
+	profileIOImport profileIOMode = iota
+	profileIOExport
+)
+
+type profileIOForm struct {
+	mode      profileIOMode
+	pathInput textinput.Model
+}
+
+func newProfileIOForm(mode profileIOMode) profileIOForm {
+	input := textinput.New()
+	input.Prompt = "> "
+	input.Placeholder = "/path/to/profiles.yaml"
+	input.CharLimit = 1024
+	input.Focus()
+	return profileIOForm{mode: mode, pathInput: input}
+}
+
+func (f profileIOForm) View() string {
+	title := "Import Profiles"
+	if f.mode == profileIOExport {
+		title = "Export Profiles"
+	}
+	return strings.Join([]string{
+		title,
+		"",
+		"Path: " + f.pathInput.View(),
+		"",
+		"[OK]  [Cancel]",
+		"Enter 确认  •  Esc 取消",
+	}, "\n")
+}
+
 type profileFormMode int
 
 const (
@@ -26,6 +62,12 @@ const (
 	profileFieldSentinelAddrs
 	profileFieldMasterName
 	profileFieldTimeout
+	profileFieldSSHHost
+	profileFieldSSHPort
+	profileFieldSSHUser
+	profileFieldSSHKeyPath
+	profileFieldCloudProvider
+	profileFieldAuthMechanism
 	profileFieldCount
 )
 
@@ -54,6 +96,10 @@ func newProfileForm(profile redis.ConnectionProfile, mode profileFormMode) profi
 	if timeout <= 0 {
 		timeout = 5
 	}
+	sshPort := profile.SSHPort
+	if sshPort <= 0 {
+		sshPort = 22
+	}
 
 	values := []string{
 		profile.Name,
@@ -64,6 +110,12 @@ func newProfileForm(profile redis.ConnectionProfile, mode profileFormMode) profi
 		strings.Join(profile.SentinelAddrs, ","),
 		profile.MasterName,
 		strconv.Itoa(timeout),
+		profile.SSHHost,
+		strconv.Itoa(sshPort),
+		profile.SSHUser,
+		profile.SSHKeyPath,
+		profile.CloudProvider,
+		profile.AuthMechanism,
 	}
 	placeholders := []string{
 		"profile name",
@@ -74,6 +126,12 @@ func newProfileForm(profile redis.ConnectionProfile, mode profileFormMode) profi
 		"host:port,host:port",
 		"sentinel master name",
 		"5",
+		"optional SSH bastion host",
+		"22",
+		"SSH user",
+		"optional private key path",
+		"aws/gcp/azure/aliyun/tencent",
+		"default/iam",
 	}
 
 	form := profileForm{
@@ -89,6 +147,12 @@ func newProfileForm(profile redis.ConnectionProfile, mode profileFormMode) profi
 			"Sentinel Addresses",
 			"Master Name",
 			"Timeout (s)",
+			"SSH Host",
+			"SSH Port",
+			"SSH User",
+			"SSH Key Path",
+			"Cloud Provider",
+			"Auth Mechanism",
 		},
 		bools: []bool{
 			profile.TLS,
@@ -160,6 +224,10 @@ func (f profileForm) profile() (redis.ConnectionProfile, error) {
 	if timeout < 0 {
 		return redis.ConnectionProfile{}, fmt.Errorf("timeout must be non-negative")
 	}
+	sshPort, err := parseIntDefault(f.inputs[profileFieldSSHPort].Value(), 22)
+	if err != nil {
+		return redis.ConnectionProfile{}, fmt.Errorf("ssh port must be an integer")
+	}
 
 	profile := redis.ConnectionProfile{
 		ID:                 f.originalID,
@@ -174,6 +242,12 @@ func (f profileForm) profile() (redis.ConnectionProfile, error) {
 		Sentinel:           f.bools[profileBoolSentinel],
 		ReadOnly:           f.bools[profileBoolReadOnly],
 		TimeoutSeconds:     timeout,
+		SSHHost:            strings.TrimSpace(f.inputs[profileFieldSSHHost].Value()),
+		SSHPort:            sshPort,
+		SSHUser:            strings.TrimSpace(f.inputs[profileFieldSSHUser].Value()),
+		SSHKeyPath:         strings.TrimSpace(f.inputs[profileFieldSSHKeyPath].Value()),
+		CloudProvider:      strings.ToLower(strings.TrimSpace(f.inputs[profileFieldCloudProvider].Value())),
+		AuthMechanism:      strings.ToLower(strings.TrimSpace(f.inputs[profileFieldAuthMechanism].Value())),
 	}
 	for _, addr := range strings.Split(f.inputs[profileFieldSentinelAddrs].Value(), ",") {
 		if addr = strings.TrimSpace(addr); addr != "" {
@@ -196,7 +270,13 @@ func (f profileForm) View() string {
 	if f.mode == profileEdit {
 		title = "Edit Connection Profile"
 	}
-	lines := []string{title, ""}
+	lines := []string{
+		title,
+		"",
+		"Templates: [AWS] [GCP] [Azure] [Aliyun] [Tencent]",
+		"[Save]  [Cancel]",
+		"",
+	}
 	for i, label := range f.labels {
 		marker := "  "
 		if i == f.focus {
@@ -216,8 +296,15 @@ func (f profileForm) View() string {
 		}
 		lines = append(lines, fmt.Sprintf("%s%-20s %s", marker, label+":", value))
 	}
-	lines = append(lines, "", "[Save]  [Cancel]", "Tab/Shift+Tab 切换字段  •  Space 切换开关  •  Enter 保存  •  Esc 取消")
+	lines = append(lines, "", "Tab/Shift+Tab 切换字段  •  Space 切换开关  •  Enter 保存  •  Esc 取消")
 	return strings.Join(lines, "\n")
+}
+
+func (f *profileForm) applyCloudTemplate(provider string) {
+	preset := redis.ApplyCloudPreset(redis.ConnectionProfile{}, provider)
+	f.inputs[profileFieldCloudProvider].SetValue(preset.CloudProvider)
+	f.inputs[profileFieldAuthMechanism].SetValue(preset.AuthMechanism)
+	f.bools[profileBoolTLS] = preset.TLS
 }
 
 func parseIntDefault(value string, fallback int) (int, error) {

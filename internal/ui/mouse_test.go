@@ -166,6 +166,27 @@ func TestMouseClickFieldRowFocusesField(t *testing.T) {
 	}
 }
 
+func TestMouseClickAnywhereOnEditFormRowFocusesField(t *testing.T) {
+	m := NewModelWithConfig(config.Default(), false)
+	m.setView(ViewConnections)
+
+	next, _ := m.Update(clickTokenMsg(t, m, "[E edit]"))
+	got := next.(Model)
+	x, y, width, ok := locateLineContaining(got.View(), "Address:")
+	if !ok {
+		t.Fatal("address row not found")
+	}
+	next, _ = got.Update(tea.MouseMsg{X: x + width - 2, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	got = next.(Model)
+
+	if got.profileForm.focus != profileFieldAddr {
+		t.Fatalf("focus = %d, want address field", got.profileForm.focus)
+	}
+	if !got.profileForm.inputs[profileFieldAddr].Focused() {
+		t.Fatal("address field was not focused")
+	}
+}
+
 func TestMouseClickExecuteRunsWorkbenchCommand(t *testing.T) {
 	m := NewModelWithConfig(config.Default(), false)
 	m.setView(ViewWorkbench)

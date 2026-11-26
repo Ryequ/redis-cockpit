@@ -23,6 +23,26 @@ type ConnectionProfile struct {
 	MasterName         string   `yaml:"master_name,omitempty" json:"master_name,omitempty"`
 	ReadOnly           bool     `yaml:"read_only" json:"read_only"`
 	TimeoutSeconds     int      `yaml:"timeout_seconds" json:"timeout_seconds"`
+	SSHHost            string   `yaml:"ssh_host,omitempty" json:"ssh_host,omitempty"`
+	SSHPort            int      `yaml:"ssh_port,omitempty" json:"ssh_port,omitempty"`
+	SSHUser            string   `yaml:"ssh_user,omitempty" json:"ssh_user,omitempty"`
+	SSHKeyPath         string   `yaml:"ssh_key_path,omitempty" json:"ssh_key_path,omitempty"`
+	CloudProvider      string   `yaml:"cloud_provider,omitempty" json:"cloud_provider,omitempty"`
+	AuthMechanism      string   `yaml:"auth_mechanism,omitempty" json:"auth_mechanism,omitempty"`
+}
+
+func ApplyCloudPreset(profile ConnectionProfile, provider string) ConnectionProfile {
+	profile.CloudProvider = strings.ToLower(strings.TrimSpace(provider))
+	profile.TLS = true
+	switch profile.CloudProvider {
+	case "aws":
+		profile.AuthMechanism = "iam"
+	case "gcp", "azure", "aliyun", "tencent":
+		profile.AuthMechanism = "default"
+	default:
+		profile.AuthMechanism = "default"
+	}
+	return profile
 }
 
 // Expanded returns a copy with credential environment variables resolved.
@@ -41,6 +61,12 @@ func (p ConnectionProfile) Validate() error {
 	}
 	if p.DB < 0 {
 		return fmt.Errorf("db must be non-negative, got %d", p.DB)
+	}
+	if p.SSHHost != "" && strings.TrimSpace(p.SSHUser) == "" {
+		return errors.New("ssh user is required when ssh_host is set")
+	}
+	if p.SSHPort < 0 {
+		return fmt.Errorf("ssh_port must be non-negative, got %d", p.SSHPort)
 	}
 	if p.Cluster && p.Sentinel {
 		return errors.New("cluster and sentinel modes are mutually exclusive")

@@ -21,13 +21,17 @@ type connectedMsg struct {
 	gen      uint64
 	profile  redis.ConnectionProfile
 	executor *redis.Executor
+	close    func() error
 	err      error
 }
 
 type profileTestedMsg struct {
-	gen  uint64
-	name string
-	err  error
+	gen        uint64
+	profileGen uint64
+	name       string
+	latency    time.Duration
+	version    string
+	err        error
 }
 
 type commandExecutedMsg struct {
@@ -42,30 +46,38 @@ func connectCmd(profile redis.ConnectionProfile, gen uint64) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), profileTimeout(profile))
 		defer cancel()
 
-		client, err := redis.NewClient(ctx, profile.Expanded())
+		client, closeClient, err := redis.Open(ctx, profile.Expanded())
 		if err != nil {
 			return connectedMsg{gen: gen, err: err}
 		}
+		cleanup := func() error {
+			if closeClient != nil {
+				return closeClient()
+			}
+			return client.Close()
+		}
 		if err := client.Ping(ctx).Err(); err != nil {
-			_ = client.Close()
+			_ = cleanup()
 			return connectedMsg{gen: gen, err: fmt.Errorf("connect to %s: %w", profile.Addr, err)}
 		}
-		return connectedMsg{gen: gen, profile: profile, executor: redis.NewExecutor(client)}
+		return connectedMsg{gen: gen, profile: profile, executor: redis.NewExecutor(client), close: cleanup}
 	}
 }
 
-func testConnectionCmd(profile redis.ConnectionProfile, gen uint64) tea.Cmd {
+func testConnectionCmd(profile redis.ConnectionProfile, gen, profileGen uint64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), profileTimeout(profile))
 		defer cancel()
 
-		client, err := redis.NewClient(ctx, profile.Expanded())
-		if err != nil {
-			return profileTestedMsg{gen: gen, name: profile.Name, err: err}
+		version, latency, err := redis.Probe(ctx, profile.Expanded())
+		return profileTestedMsg{
+			gen:        gen,
+			profileGen: profileGen,
+			name:       profile.Name,
+			latency:    latency,
+			version:    version,
+			err:        err,
 		}
-		err = client.Ping(ctx).Err()
-		_ = client.Close()
-		return profileTestedMsg{gen: gen, name: profile.Name, err: err}
 	}
 }
 
