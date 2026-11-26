@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/codebuddy/redis-tui/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,7 +39,7 @@ func DefaultPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve user config dir: %w", err)
 	}
-	return filepath.Join(dir, "redis-tui", "config.yaml"), nil
+	return filepath.Join(dir, "redis-cockpit", "config.yaml"), nil
 }
 
 // Load reads a config file; a missing file yields defaults without writing.

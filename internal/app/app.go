@@ -8,9 +8,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/codebuddy/redis-tui/internal/config"
-	"github.com/codebuddy/redis-tui/internal/security"
-	"github.com/codebuddy/redis-tui/internal/ui"
+	"github.com/Ryequ/redis-cockpit/internal/config"
+	"github.com/Ryequ/redis-cockpit/internal/security"
+	"github.com/Ryequ/redis-cockpit/internal/ui"
 )
 
 // Options is the application-level configuration supplied by the CLI layer.
@@ -26,7 +26,7 @@ func Run(opts Options) error {
 	if opts.Debug {
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}
-	slog.Debug("starting redis-tui", "config", opts.ConfigPath, "profile", opts.Profile, "readonly", opts.ReadOnly)
+	slog.Debug("starting redis-cockpit", "config", opts.ConfigPath, "profile", opts.Profile, "readonly", opts.ReadOnly)
 
 	path := opts.ConfigPath
 	if path == "" {

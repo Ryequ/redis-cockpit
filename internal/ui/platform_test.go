@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codebuddy/redis-tui/internal/config"
+	"github.com/Ryequ/redis-cockpit/internal/config"
 )
 
 func TestDetectMouseSupportReturnsFalseForDumbTerminal(t *testing.T) {

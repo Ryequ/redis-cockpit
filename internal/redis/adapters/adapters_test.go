@@ -8,7 +8,7 @@ import (
 	miniredis "github.com/alicebob/miniredis/v2"
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/codebuddy/redis-tui/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 )
 
 func newTestManager(t *testing.T) (*Manager, context.Context) {

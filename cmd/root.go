@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/codebuddy/redis-tui/internal/app"
+	"github.com/Ryequ/redis-cockpit/internal/app"
 )
 
 // Options contains command-line startup settings.
@@ -20,7 +20,7 @@ type Options struct {
 // embedding callers predictable.
 func ParseArgs(args []string) (Options, error) {
 	var opts Options
-	fs := flag.NewFlagSet("redis-tui", flag.ContinueOnError)
+	fs := flag.NewFlagSet("redis-cockpit", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&opts.ConfigPath, "config", "", "path to config YAML file")
 	fs.StringVar(&opts.Profile, "profile", "", "connection profile name to open at startup")

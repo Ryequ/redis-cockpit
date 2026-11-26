@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	"github.com/codebuddy/redis-tui/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 )
 
 // UpsertProfile adds or replaces a profile by name.

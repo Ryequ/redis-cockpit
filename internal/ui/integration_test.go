@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Ryequ/redis-cockpit/internal/config"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 	miniredis "github.com/alicebob/miniredis/v2"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/codebuddy/redis-tui/internal/config"
-	"github.com/codebuddy/redis-tui/internal/redis"
 )
 
 func TestConnectionViewListsConfiguredProfiles(t *testing.T) {

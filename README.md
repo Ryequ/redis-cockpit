@@ -1,4 +1,4 @@
-# redis-tui
+# redis-cockpit
 
 一个在终端中操作 Redis 的 TUI 工具，支持键盘优先操作和鼠标选择，覆盖数据浏览、命令执行、运维监控、Pub/Sub、MONITOR、脚本与事务等能力。
 
@@ -22,15 +22,15 @@
 ## 构建与运行
 
 ```bash
-go build -o bin/redis-tui .
-./bin/redis-tui
+go build -o bin/redis-cockpit .
+./bin/redis-cockpit
 ```
 
 Windows PowerShell:
 
 ```powershell
-go build -o bin/redis-tui.exe .
-.\bin\redis-tui.exe
+go build -o bin/redis-cockpit.exe .
+.\bin\redis-cockpit.exe
 ```
 
 启动参数：
@@ -45,16 +45,16 @@ go build -o bin/redis-tui.exe .
 示例：
 
 ```bash
-./bin/redis-tui --config ./config.example.yaml --profile local
+./bin/redis-cockpit --config ./config.example.yaml --profile local
 ```
 
 ## 配置
 
 默认配置文件路径由 `os.UserConfigDir` 决定，通常为：
 
-- Linux: `$XDG_CONFIG_HOME/redis-tui/config.yaml`
-- macOS: `$HOME/Library/Application Support/redis-tui/config.yaml`
-- Windows: `%APPDATA%\redis-tui\config.yaml`
+- Linux: `$XDG_CONFIG_HOME/redis-cockpit/config.yaml`
+- macOS: `$HOME/Library/Application Support/redis-cockpit/config.yaml`
+- Windows: `%APPDATA%\redis-cockpit\config.yaml`
 
 首次启动时若配置文件不存在，会使用默认 `local` 连接档案（`127.0.0.1:6379`）。
 

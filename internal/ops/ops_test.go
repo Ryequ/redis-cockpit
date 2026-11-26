@@ -6,7 +6,7 @@ import (
 
 	miniredis "github.com/alicebob/miniredis/v2"
 
-	"github.com/codebuddy/redis-tui/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 )
 
 func TestParseInfoGroupsSections(t *testing.T) {

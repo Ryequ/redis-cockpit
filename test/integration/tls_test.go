@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/codebuddy/redis-tui/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 )
 
 func TestTLSConnection(t *testing.T) {

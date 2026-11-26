@@ -8,9 +8,9 @@ import (
 	miniredis "github.com/alicebob/miniredis/v2"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/codebuddy/redis-tui/internal/config"
-	"github.com/codebuddy/redis-tui/internal/redis"
-	"github.com/codebuddy/redis-tui/internal/redis/adapters"
+	"github.com/Ryequ/redis-cockpit/internal/config"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/redis/adapters"
 )
 
 func newBrowserModel(t *testing.T) (Model, context.Context) {

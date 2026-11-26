@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codebuddy/redis-tui/internal/command"
+	"github.com/Ryequ/redis-cockpit/internal/command"
 )
 
 // RawDoer is implemented by Executor and allows discovery to run COMMAND.

@@ -8,9 +8,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/codebuddy/redis-tui/internal/redis"
-	"github.com/codebuddy/redis-tui/internal/result"
-	"github.com/codebuddy/redis-tui/internal/security"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/result"
+	"github.com/Ryequ/redis-cockpit/internal/security"
 )
 
 const (

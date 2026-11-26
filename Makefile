@@ -1,5 +1,5 @@
 GO ?= go
-BINARY := redis-tui
+BINARY := redis-cockpit
 
 .PHONY: build test integration vet fmt cross clean
 

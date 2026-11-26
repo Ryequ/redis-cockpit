@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codebuddy/redis-tui/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 )
 
 func TestSentinelConnection(t *testing.T) {

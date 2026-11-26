@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/codebuddy/redis-tui/internal/result"
+	"github.com/Ryequ/redis-cockpit/internal/result"
 	goredis "github.com/redis/go-redis/v9"
 )
 

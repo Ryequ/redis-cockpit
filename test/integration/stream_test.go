@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codebuddy/redis-tui/internal/redis"
-	"github.com/codebuddy/redis-tui/internal/stream"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/stream"
 )
 
 func TestPubSubAndStreamCommands(t *testing.T) {

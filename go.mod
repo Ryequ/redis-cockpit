@@ -1,4 +1,4 @@
-module github.com/codebuddy/redis-tui
+module github.com/Ryequ/redis-cockpit
 
 go 1.26.0
 

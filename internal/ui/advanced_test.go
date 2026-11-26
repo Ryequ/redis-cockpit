@@ -8,9 +8,9 @@ import (
 	miniredis "github.com/alicebob/miniredis/v2"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/codebuddy/redis-tui/internal/config"
-	"github.com/codebuddy/redis-tui/internal/ops"
-	"github.com/codebuddy/redis-tui/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/config"
+	"github.com/Ryequ/redis-cockpit/internal/ops"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 )
 
 func newAdvancedModel(t *testing.T) Model {

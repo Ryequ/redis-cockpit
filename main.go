@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/codebuddy/redis-tui/cmd"
+	"github.com/Ryequ/redis-cockpit/cmd"
 )
 
 func main() {
 	if err := cmd.Execute(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "redis-tui:", err)
+		fmt.Fprintln(os.Stderr, "redis-cockpit:", err)
 		os.Exit(1)
 	}
 }

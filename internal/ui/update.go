@@ -6,12 +6,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/codebuddy/redis-tui/internal/command"
-	"github.com/codebuddy/redis-tui/internal/ops"
-	"github.com/codebuddy/redis-tui/internal/redis/adapters"
-	"github.com/codebuddy/redis-tui/internal/result"
-	"github.com/codebuddy/redis-tui/internal/security"
-	"github.com/codebuddy/redis-tui/internal/stream"
+	"github.com/Ryequ/redis-cockpit/internal/command"
+	"github.com/Ryequ/redis-cockpit/internal/ops"
+	"github.com/Ryequ/redis-cockpit/internal/redis/adapters"
+	"github.com/Ryequ/redis-cockpit/internal/result"
+	"github.com/Ryequ/redis-cockpit/internal/security"
+	"github.com/Ryequ/redis-cockpit/internal/stream"
 )
 
 func (m Model) Init() tea.Cmd {
@@ -549,7 +549,7 @@ func (m Model) handleStreamsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Connect to Redis before publishing")
 			return m, nil
 		}
-		return m, publishCmd(m.streamHub, m.streamChannel(), "hello from redis-tui", m.generation)
+		return m, publishCmd(m.streamHub, m.streamChannel(), "hello from redis-cockpit", m.generation)
 	case 'm':
 		if err := m.policy.Check([]string{"MONITOR"}); err != nil {
 			m.setStatus(err.Error())
@@ -583,7 +583,7 @@ func (m Model) handleStreamsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) streamChannel() string {
 	channel := strings.TrimSpace(m.streamInput.Value())
 	if channel == "" {
-		return "redis-tui"
+		return "redis-cockpit"
 	}
 	return channel
 }

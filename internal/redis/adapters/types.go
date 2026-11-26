@@ -5,7 +5,7 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	redisclient "github.com/codebuddy/redis-tui/internal/redis"
+	redisclient "github.com/Ryequ/redis-cockpit/internal/redis"
 )
 
 // KeyInfo is the metadata shown in the key browser.

@@ -36,16 +36,16 @@ jobs:
         include:
           - goos: windows
             goarch: amd64
-            output: redis-tui-windows-amd64.exe
+            output: redis-cockpit-windows-amd64.exe
           - goos: linux
             goarch: amd64
-            output: redis-tui-linux-amd64
+            output: redis-cockpit-linux-amd64
           - goos: darwin
             goarch: amd64
-            output: redis-tui-darwin-amd64
+            output: redis-cockpit-darwin-amd64
           - goos: darwin
             goarch: arm64
-            output: redis-tui-darwin-arm64
+            output: redis-cockpit-darwin-arm64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

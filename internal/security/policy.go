@@ -3,7 +3,7 @@ package security
 import (
 	"fmt"
 
-	"github.com/codebuddy/redis-tui/internal/command"
+	"github.com/Ryequ/redis-cockpit/internal/command"
 )
 
 // Policy enforces read-only mode and confirmation requirements.

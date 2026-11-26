@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/codebuddy/redis-tui/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 )
 
 func TestClusterConnection(t *testing.T) {

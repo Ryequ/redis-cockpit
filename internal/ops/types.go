@@ -1,6 +1,6 @@
 package ops
 
-import redisclient "github.com/codebuddy/redis-tui/internal/redis"
+import redisclient "github.com/Ryequ/redis-cockpit/internal/redis"
 
 // ClientInfo is a parsed CLIENT LIST row.
 type ClientInfo struct {

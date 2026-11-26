@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/codebuddy/redis-tui/internal/command"
+	"github.com/Ryequ/redis-cockpit/internal/command"
 )
 
 type fakeDoer struct {

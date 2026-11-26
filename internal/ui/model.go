@@ -4,14 +4,14 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/codebuddy/redis-tui/internal/command"
-	"github.com/codebuddy/redis-tui/internal/config"
-	"github.com/codebuddy/redis-tui/internal/ops"
-	"github.com/codebuddy/redis-tui/internal/redis"
-	"github.com/codebuddy/redis-tui/internal/redis/adapters"
-	"github.com/codebuddy/redis-tui/internal/result"
-	"github.com/codebuddy/redis-tui/internal/security"
-	"github.com/codebuddy/redis-tui/internal/stream"
+	"github.com/Ryequ/redis-cockpit/internal/command"
+	"github.com/Ryequ/redis-cockpit/internal/config"
+	"github.com/Ryequ/redis-cockpit/internal/ops"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
+	"github.com/Ryequ/redis-cockpit/internal/redis/adapters"
+	"github.com/Ryequ/redis-cockpit/internal/result"
+	"github.com/Ryequ/redis-cockpit/internal/security"
+	"github.com/Ryequ/redis-cockpit/internal/stream"
 )
 
 // ViewID identifies a top-level workspace view.
@@ -101,7 +101,7 @@ func NewModelWithConfig(cfg config.Config, readOnly bool) Model {
 	filter.CharLimit = 256
 
 	streamChannel := textinput.New()
-	streamChannel.Placeholder = "redis-tui"
+	streamChannel.Placeholder = "redis-cockpit"
 	streamChannel.Prompt = "#"
 	streamChannel.CharLimit = 256
 
