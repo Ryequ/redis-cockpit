@@ -19,30 +19,35 @@ const (
 
 type profileIOForm struct {
 	mode      profileIOMode
+	language  string
 	pathInput textinput.Model
 }
 
 func newProfileIOForm(mode profileIOMode) profileIOForm {
+	return newProfileIOFormWithLanguage(mode, "zh")
+}
+
+func newProfileIOFormWithLanguage(mode profileIOMode, language string) profileIOForm {
 	input := textinput.New()
 	input.Prompt = "> "
 	input.Placeholder = "/path/to/profiles.yaml"
 	input.CharLimit = 1024
 	input.Focus()
-	return profileIOForm{mode: mode, pathInput: input}
+	return profileIOForm{mode: mode, language: language, pathInput: input}
 }
 
 func (f profileIOForm) View() string {
-	title := "Import Profiles"
+	title := tr(f.language, "Import Profiles")
 	if f.mode == profileIOExport {
-		title = "Export Profiles"
+		title = tr(f.language, "Export Profiles")
 	}
 	return strings.Join([]string{
 		title,
 		"",
-		"Path: " + f.pathInput.View(),
+		tr(f.language, "Path:") + " " + f.pathInput.View(),
 		"",
-		buttonRow("[OK]", "[Cancel]"),
-		"Enter 确认  •  Esc 取消",
+		buttonRowForLanguage(f.language, "[OK]", "[Cancel]"),
+		tr(f.language, "Enter 确认  •  Esc 取消"),
 	}, "\n")
 }
 
@@ -82,6 +87,7 @@ const (
 
 type profileForm struct {
 	mode         profileFormMode
+	language     string
 	originalName string
 	originalID   string
 	inputs       []textinput.Model
@@ -89,9 +95,14 @@ type profileForm struct {
 	bools        []bool
 	boolLabels   []string
 	focus        int
+	scroll       int
 }
 
 func newProfileForm(profile redis.ConnectionProfile, mode profileFormMode) profileForm {
+	return newProfileFormWithLanguage(profile, mode, "zh")
+}
+
+func newProfileFormWithLanguage(profile redis.ConnectionProfile, mode profileFormMode, language string) profileForm {
 	timeout := profile.TimeoutSeconds
 	if timeout <= 0 {
 		timeout = 5
@@ -133,27 +144,29 @@ func newProfileForm(profile redis.ConnectionProfile, mode profileFormMode) profi
 		"aws/gcp/azure/aliyun/tencent",
 		"default/iam",
 	}
+	for i := range placeholders {
+		placeholders[i] = tr(language, placeholders[i])
+	}
+
+	labels := []string{
+		"Name", "Address", "Username", "Password", "DB", "Sentinel Addresses",
+		"Master Name", "Timeout (s)", "SSH Host", "SSH Port", "SSH User",
+		"SSH Key Path", "Cloud Provider", "Auth Mechanism",
+	}
+	for i := range labels {
+		labels[i] = tr(language, labels[i])
+	}
+	boolLabels := []string{"TLS", "Skip TLS Verify", "Cluster", "Sentinel", "Read Only"}
+	for i := range boolLabels {
+		boolLabels[i] = tr(language, boolLabels[i])
+	}
 
 	form := profileForm{
 		mode:         mode,
+		language:     language,
 		originalName: profile.Name,
 		originalID:   profile.ID,
-		labels: []string{
-			"Name",
-			"Address",
-			"Username",
-			"Password",
-			"DB",
-			"Sentinel Addresses",
-			"Master Name",
-			"Timeout (s)",
-			"SSH Host",
-			"SSH Port",
-			"SSH User",
-			"SSH Key Path",
-			"Cloud Provider",
-			"Auth Mechanism",
-		},
+		labels:       labels,
 		bools: []bool{
 			profile.TLS,
 			profile.InsecureSkipVerify,
@@ -161,13 +174,7 @@ func newProfileForm(profile redis.ConnectionProfile, mode profileFormMode) profi
 			profile.Sentinel,
 			profile.ReadOnly,
 		},
-		boolLabels: []string{
-			"TLS",
-			"Skip TLS Verify",
-			"Cluster",
-			"Sentinel",
-			"Read Only",
-		},
+		boolLabels: boolLabels,
 	}
 	for i, value := range values {
 		input := textinput.New()
@@ -265,24 +272,14 @@ func (f profileForm) profile() (redis.ConnectionProfile, error) {
 	return profile, nil
 }
 
-func (f profileForm) View() string {
-	title := "New Connection Profile"
-	if f.mode == profileEdit {
-		title = "Edit Connection Profile"
-	}
-	lines := []string{
-		title,
-		"",
-		styleButtons("Templates: [AWS] [GCP] [Azure] [Aliyun] [Tencent]"),
-		buttonRow("[Save]", "[Cancel]"),
-		"",
-	}
+func (f profileForm) contentLines() []string {
+	lines := make([]string, 0, profileFieldCount+profileBoolCount)
 	for i, label := range f.labels {
 		marker := "  "
 		if i == f.focus {
 			marker = "▸ "
 		}
-		lines = append(lines, fmt.Sprintf("%s%-20s %s", marker, label+":", f.inputs[i].View()))
+		lines = append(lines, marker+padToDisplayWidth(label+":", 20)+" "+f.inputs[i].View())
 	}
 	for i, label := range f.boolLabels {
 		focus := f.focus - profileFieldCount
@@ -294,9 +291,66 @@ func (f profileForm) View() string {
 		if f.bools[i] {
 			value = "true"
 		}
-		lines = append(lines, fmt.Sprintf("%s%-20s %s", marker, label+":", value))
+		lines = append(lines, marker+padToDisplayWidth(label+":", 20)+" "+value)
 	}
-	lines = append(lines, "", "Tab/Shift+Tab 切换字段  •  Space 切换开关  •  Enter 保存  •  Esc 取消")
+	return lines
+}
+
+func (f profileForm) title() string {
+	if f.mode == profileEdit {
+		return tr(f.language, "Edit Connection Profile")
+	}
+	return tr(f.language, "New Connection Profile")
+}
+
+func (f profileForm) View() string {
+	lines := []string{
+		f.title(),
+		"",
+		styleButtonsForLanguage(f.language, tr(f.language, "Templates:")+" [AWS] [GCP] [Azure] [Aliyun] [Tencent]"),
+		"",
+	}
+	lines = append(lines, f.contentLines()...)
+	lines = append(lines,
+		"",
+		buttonRowForLanguage(f.language, "[Save]", "[Cancel]"),
+		tr(f.language, "Tab/Shift+Tab 切换字段  •  Space 切换开关  •  Enter 保存  •  Esc 取消"),
+	)
+	return strings.Join(lines, "\n")
+}
+
+func (f profileForm) ViewHeight(maxLines int) string {
+	all := f.contentLines()
+	footer := []string{
+		"",
+		buttonRowForLanguage(f.language, "[Save]", "[Cancel]"),
+		tr(f.language, "Tab/Shift+Tab 切换字段  •  Space 切换开关  •  Enter 保存  •  Esc 取消"),
+	}
+	available := maxInt(maxLines-7, 1)
+	start := f.scroll
+	if f.focus < start {
+		start = f.focus
+	}
+	if f.focus >= start+available {
+		start = f.focus - available + 1
+	}
+	maxStart := maxInt(len(all)-available, 0)
+	if start > maxStart {
+		start = maxStart
+	}
+	if start < 0 {
+		start = 0
+	}
+	end := minInt(start+available, len(all))
+
+	header := []string{
+		f.title(),
+		"",
+		styleButtonsForLanguage(f.language, tr(f.language, "Templates:")+" [AWS] [GCP] [Azure] [Aliyun] [Tencent]"),
+		"",
+	}
+	lines := append(header, all[start:end]...)
+	lines = append(lines, footer...)
 	return strings.Join(lines, "\n")
 }
 

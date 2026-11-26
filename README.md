@@ -7,42 +7,133 @@
 >
 > **This project is strictly for personal entertainment, learning and testing only. It is not intended for production use and comes with no stability, security or compatibility guarantees. Do not use it with critical systems, production data or irrecoverable data.**
 
-一个在终端中操作 Redis 的 TUI 工具，支持键盘优先操作和鼠标选择，覆盖数据浏览、命令执行、运维监控、Pub/Sub、MONITOR、脚本与事务等能力。
+`redis-cockpit` 是一个终端内运行的 Redis TUI 工具，提供连接管理、Key 浏览、命令执行、运维监控、Pub/Sub、MONITOR、脚本与事务等功能。工具以键盘操作为主，并支持在兼容终端中使用鼠标。
 
-## 功能
+当前发布版本：`v0.2.0`
 
-- 连接管理：单机、远程、Cluster、Sentinel、TLS、密码认证、只读实例、SSH 隧道和云 Redis 模板。
-- 连接页增强：搜索、排序、按模式分组、复制连接、导入/导出、健康状态、延迟和版本展示。
+## 功能特性
+
+- 连接管理：单机、远程、Cluster、Sentinel、TLS、密码认证、只读实例、SSH 隧道与云 Redis 模板。
+- 连接页增强：搜索、排序、按模式分组、复制连接、导入/导出、健康状态、延迟与版本展示。
 - 实例摘要：Connections 页并排展示 Server、Memory、Stats 三组关键指标。
-- Key 浏览：`SCAN` 分页、类型/TTL 展示、筛选、值预览、删除确认。
+- Key 浏览：`SCAN` 分页、类型/TTL 展示、筛选、树形前缀视图、值预览与滚动浏览。
 - 数据类型：String、Hash、List、Set、ZSet、Stream 的分页读取。
 - 命令工作台：命令解析、历史记录、任意 Redis 命令执行、危险命令确认。
 - 运维视图：`INFO`、`CONFIG`、`CLIENT LIST`、`SLOWLOG`、复制状态、模块与 ACL。
 - 流式任务：Pub/Sub 订阅发布、MONITOR、Stream 条目操作。
-- 高级能力：Lua 脚本和 MULTI/EXEC 事务。
-- 安全：只读模式、危险命令二次确认、密码脱敏、JSONL 审计日志。
-- 交互：Tab/数字键切换视图，方向键或 hjkl 导航，鼠标点击顶部标签、导航、按钮、列表和确认弹层，终端不支持鼠标时自动降级。
+- 高级能力：Lua 脚本与 MULTI/EXEC 事务。
+- 安全：只读模式、写命令二次确认、密码脱敏、JSONL 审计日志。
+- 交互：中英文界面、多套主题、顶部标签、左侧导航、可点击按钮与确认弹层。
 
-## 环境要求
+## 构建环境
+
+从源码构建需要：
 
 - Go 1.26 或更高版本。
 - 可连接到的 Redis 实例。本地开发可使用 `127.0.0.1:6379`。
+- Windows Terminal、macOS Terminal/iTerm2 或 Linux xterm 兼容终端可获得完整鼠标支持；传统 Windows CMD 会自动降级为键盘操作。
 
-## 构建与运行
+## 如何使用
+
+### 安装
+
+#### 方式一：Go 命令行安装
+
+如果设备已安装 Go 1.26+：
 
 ```bash
+go install github.com/Ryequ/redis-cockpit@latest
+```
+
+安装后的可执行文件位置：
+
+```text
+Linux/macOS: ~/go/bin/redis-cockpit
+Windows:     %USERPROFILE%\go\bin\redis-cockpit.exe
+```
+
+确认安装：
+
+```bash
+redis-cockpit
+```
+
+如果需要安装指定版本：
+
+```bash
+go install github.com/Ryequ/redis-cockpit@v0.2.0
+```
+
+#### 方式二：从 GitHub Releases 下载预编译二进制
+
+打开 Releases 页面：
+
+```text
+https://github.com/Ryequ/redis-cockpit/releases/latest
+```
+
+根据设备选择：
+
+| 平台 | 文件名 |
+| --- | --- |
+| Windows x64 | `redis-cockpit-windows-amd64.exe` |
+| Linux x64 | `redis-cockpit-linux-amd64` |
+| Linux ARM64 | `redis-cockpit-linux-arm64` |
+| macOS Intel | `redis-cockpit-darwin-amd64` |
+| macOS Apple Silicon | `redis-cockpit-darwin-arm64` |
+
+Linux x64 示例：
+
+```bash
+curl -L -o redis-cockpit \
+  https://github.com/Ryequ/redis-cockpit/releases/latest/download/redis-cockpit-linux-amd64
+
+chmod +x redis-cockpit
+sudo mv redis-cockpit /usr/local/bin/
+redis-cockpit
+```
+
+macOS Apple Silicon 示例：
+
+```bash
+curl -L -o redis-cockpit \
+  https://github.com/Ryequ/redis-cockpit/releases/latest/download/redis-cockpit-darwin-arm64
+
+xattr -cr ./redis-cockpit
+chmod +x redis-cockpit
+sudo mv redis-cockpit /usr/local/bin/
+redis-cockpit
+```
+
+Windows PowerShell 示例：
+
+```powershell
+Invoke-WebRequest `
+  -Uri "https://github.com/Ryequ/redis-cockpit/releases/latest/download/redis-cockpit-windows-amd64.exe" `
+  -OutFile "redis-cockpit.exe"
+
+.\redis-cockpit.exe
+```
+
+每个 Release 还包含 `checksums.txt`，可用于校验下载文件。
+
+### 从源码构建
+
+```bash
+git clone https://github.com/Ryequ/redis-cockpit.git
+cd redis-cockpit
 go build -o bin/redis-cockpit .
 ./bin/redis-cockpit
 ```
 
-Windows PowerShell:
+Windows PowerShell：
 
 ```powershell
 go build -o bin/redis-cockpit.exe .
 .\bin\redis-cockpit.exe
 ```
 
-启动参数：
+### 启动参数
 
 ```text
 --config      指定配置文件路径
@@ -59,17 +150,32 @@ go build -o bin/redis-cockpit.exe .
 
 ## 配置
 
-默认配置文件路径由 `os.UserConfigDir` 决定，通常为：
+默认配置文件路径由 `os.UserConfigDir` 决定：
 
-- Linux: `$XDG_CONFIG_HOME/redis-cockpit/config.yaml`
-- macOS: `$HOME/Library/Application Support/redis-cockpit/config.yaml`
-- Windows: `%APPDATA%\redis-cockpit\config.yaml`
+- Linux：`$XDG_CONFIG_HOME/redis-cockpit/config.yaml`
+- macOS：`$HOME/Library/Application Support/redis-cockpit/config.yaml`
+- Windows：`%APPDATA%\redis-cockpit\config.yaml`
 
 首次启动时若配置文件不存在，会使用默认 `local` 连接档案（`127.0.0.1:6379`）。
 
-完整示例见 `config.example.yaml`。`language` 支持 `zh` / `en`，`theme` 支持 `aurora` / `ember` / `ocean` / `graphite`，也可以在 TUI 的 Settings 页面切换。
+完整示例见 [`config.example.yaml`](./config.example.yaml)。主要配置项：
 
-密码字段支持环境变量占位符，例如：
+```yaml
+active_profile: local
+language: zh
+theme: aurora
+page_size: 100
+max_preview: 4096
+```
+
+- `language`：支持 `zh` / `en`
+- `theme`：支持 `aurora` / `ember` / `ocean` / `graphite`
+
+也可以在 TUI 的 Settings 页面切换语言和主题。
+
+### 密码与环境变量
+
+密码字段支持环境变量占位符：
 
 ```yaml
 password: ${REDIS_TUI_PASSWORD}
@@ -77,38 +183,12 @@ password: ${REDIS_TUI_PASSWORD}
 
 占位符只在建立连接时展开；通过 TUI 保存配置会保留占位符，不会把明文密码写回配置文件。
 
-### 在 TUI 中管理连接
+### 连接模板
 
-按 `1` 进入 Connections 页面后：
-
-| 按键 | 功能 |
-| --- | --- |
-| `↑` / `↓` 或 `j` / `k` | 选择连接档案 |
-| `Enter` | 连接选中的 Redis 实例 |
-| `/` | 搜索连接档案 |
-| `o` | 切换排序方式：配置顺序 / 名称 / 地址 / 模式 |
-| `g` | 按连接模式分组 |
-| `a` | 批量测试所有连接 |
-| `n` | 新建连接档案 |
-| `e` | 编辑选中的连接档案 |
-| `c` | 复制选中的连接档案 |
-| `i` / `x` | 导入 / 导出连接档案 |
-| `d` | 删除选中的连接档案，需按 `y` 确认 |
-| `t` | 测试选中的连接 |
-
-当前选中连接使用 `▸` 标记，当前激活连接显示 `active`。连接档案测试结果会显示 `OK`、延迟和 Redis 版本。
-
-Connections 页面还会在列表下方并排显示 Server、Memory、Stats 三组摘要：
-
-- Server：Redis version、OS、PID
-- Memory：Used Memory、Used Memory Peak、Used Memory Lua
-- Stats：Connected Clients、Total Connections、Total Commands
-
-新增和编辑使用表单，支持 `Tab` / `Shift+Tab` 切换字段、`Space` 切换 TLS / Cluster / Sentinel / 只读等开关、`Enter` 保存、`Esc` 取消。表单中的字段、开关和云模板按钮均可用鼠标点击。保存后会立即写入当前配置文件。
-
-也可以直接编辑配置文件中的 `profiles` 列表。例如：
+配置中的 `profiles` 示例：
 
 ```yaml
+profiles:
   - id: prod
     name: prod
     addr: redis.example.com:6379
@@ -124,45 +204,7 @@ Connections 页面还会在列表下方并排显示 Server、Memory、Stats 三�
 
 Cluster 实例将 `cluster` 设为 `true`；Sentinel 实例将 `sentinel` 设为 `true` 并填写 `sentinel_addrs` 与 `master_name`。两种模式不能同时开启。
 
-SSH 隧道通过本机 `ssh` 命令建立本地端口转发，当前支持 SSH agent 或 `ssh_key_path` 指定的私钥认证，不支持交互式密码输入。云 Redis 模板可在连接表单中点击 `[AWS]` / `[GCP]` / `[Azure]` / `[Aliyun]` / `[Tencent]` 快速设置 TLS、云厂商和认证方式字段；`iam` 等云 token 需要由外部工具生成后填入 password 字段，当前版本不内置 token 生成。
-
-### Settings 页面
-
-按 `6` 或 `?` 进入 Settings 页面：
-
-- 语言：点击 `[中文]` 或 `[English]` 切换界面语言
-- 主题：点击 `[Aurora]` / `[Ember]` / `[Ocean]` / `[Graphite]` 切换主题色
-- 帮助：Settings 页面内置快捷键说明，顶部标签栏不再显示 `[Help]`
-
-语言与主题会保存到配置文件，下次启动自动生效。
-
-## 快捷键
-
-| 按键 | 功能 |
-| --- | --- |
-| `1` - `6` | 切换 Connections / Keys / Workbench / Ops / Streams / Settings |
-| `Tab` / `Shift+Tab` | 循环切换视图 |
-| `↑` / `↓` 或 `k` / `j` | 移动选择 |
-| `Enter` | 连接、查看值、执行命令、确认 |
-| `Esc` | 清除输入、关闭弹层、取消确认 |
-| `?` | 打开 Settings 页面查看帮助 |
-| `Ctrl+C` / `Ctrl+Q` | 退出 |
-| `/` | 在 Keys 视图编辑筛选条件 |
-| `r` | 刷新 Keys 或 Ops 快照 |
-| `n` | 加载下一页 Key |
-| `a` | 新增 Key；可输入 Key 名称和可选初始值，创建后自动选中新 Key |
-| `v` | 修改所选 String Key 的 Value（需二次确认） |
-| `d` | 删除选中的 Key（需二次确认） |
-| `t` | 在平铺列表和前缀树视图之间切换 |
-| `←` / `→` | 树视图中折叠 / 展开所选 Key 的父节点 |
-| `PgUp` / `PgDn` | 滚动 Key 列表或树 |
-| `s` / `p` / `m` / `x` | 在 Streams 视图订阅、发布、启动 MONITOR、停止 |
-
-Keys 页面的前缀树视图按 `:` 将当前页 Key 拆分为层级节点，分支默认展开，可点击 `▾` / `▸` 节点或使用方向键折叠/展开。树视图是基于当前 SCAN 页的展示层分组，不会修改 Redis 中的 Key 名称。
-
-Key 列表和树视图都支持滚动：可用 `PgUp` / `PgDn`、方向键移动选中项，或在支持鼠标的终端中滚动滚轮；选中项会自动保持在可视区域内。
-
-鼠标可点击顶部标签、左侧导航、连接列表、Key 列表、输入框、命令历史、操作按钮，以及删除/危险命令确认弹层中的 `[Y]` / `[N]` 按钮。传统 Windows CMD 可能不支持鼠标事件，工具会自动降级并保留键盘操作。
+SSH 隧道通过本机 `ssh` 命令建立本地端口转发，支持 SSH agent 或 `ssh_key_path` 指定的私钥认证，不支持交互式密码输入。云 Redis 模板可在连接表单中点击 `[AWS]` / `[GCP]` / `[Azure]` / `[Aliyun]` / `[Tencent]` 快速设置 TLS、云厂商和认证方式字段；`iam` 等云 token 需要由外部工具生成后填入 `password` 字段。
 
 ## 测试
 
@@ -172,27 +214,51 @@ Key 列表和树视图都支持滚动：可用 `PgUp` / `PgDn`、方向键移动
 go test ./...
 ```
 
-集成测试需要真实 Redis，默认跳过：
+集成测试：
 
 ```bash
 go test -tags integration ./test/integration
 ```
 
-集成测试环境变量：
+静态检查：
 
-| 变量 | 用途 |
-| --- | --- |
-| `REDIS_TUI_TEST_ADDR` | 单机 Redis 地址 |
-| `REDIS_TUI_TEST_CLUSTER_ADDR` | Cluster 节点地址 |
-| `REDIS_TUI_TEST_SENTINEL_ADDRS` | Sentinel 地址列表，逗号分隔 |
-| `REDIS_TUI_TEST_MASTER_NAME` | Sentinel master 名称 |
-| `REDIS_TUI_TEST_TLS_ADDR` | TLS Redis 地址 |
-| `REDIS_TUI_TEST_TLS_PASSWORD` | TLS Redis 密码，可选 |
+```bash
+go vet ./...
+```
 
-## 审计日志
+## 安全说明
 
-危险命令和写命令执行时会写入配置目录下的 `audit.jsonl`。日志只记录时间、连接档案和脱敏后的命令，不记录密码或完整敏感参数。
+- 危险命令和写命令执行时会写入配置目录下的 `audit.jsonl`。
+- 日志只记录时间、连接档案和脱敏后的命令，不记录密码或完整敏感参数。
+- 工具包含只读模式、危险命令确认、删除/编辑确认和连接档案健康检查。
+- 尽管如此，本项目仍不应被用于生产环境或不可恢复数据。
 
-## 架构
+## 项目结构
 
-见 `docs/architecture.md`。可行性分析见 `docs/feasibility.md`。
+```text
+.
+├── cmd/                    # 命令行参数
+├── internal/
+│   ├── app/                # 应用启动
+│   ├── command/            # Redis 命令解析
+│   ├── config/             # 配置读写
+│   ├── ops/                # 运维数据解析
+│   ├── result/             # 返回值归一化与渲染
+│   ├── security/           # 策略、脱敏、审计
+│   ├── stream/             # Pub/Sub 与 MONITOR
+│   └── ui/                 # TUI 视图与交互
+├── test/integration/       # 集成测试
+├── .github/workflows/      # CI 与 Release 工作流
+├── config.example.yaml
+└── main.go
+```
+
+## 相关文档
+
+- [架构说明](./docs/architecture.md)
+- [可行性分析](./docs/feasibility.md)
+- [配置示例](./config.example.yaml)
+
+## 许可证
+
+当前仓库未附带 `LICENSE` 文件。仓库公开可访问不代表任何形式的授权、担保或许可。

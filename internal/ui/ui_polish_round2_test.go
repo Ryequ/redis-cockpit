@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/Ryequ/redis-cockpit/internal/config"
 	"github.com/Ryequ/redis-cockpit/internal/redis/adapters"
 	"github.com/Ryequ/redis-cockpit/internal/result"
@@ -49,59 +47,5 @@ func TestKeyActionButtonsUseChineseLabels(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("localized button %q missing:\n%s", want, body)
 		}
-	}
-}
-
-func TestEditValueRequiresFirstConfirmation(t *testing.T) {
-	m := polishTestModel()
-
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
-	got := next.(Model)
-	if got.keyForm != nil {
-		t.Fatal("edit form opened without confirmation")
-	}
-	if got.pendingEditConfirm != "greeting" {
-		t.Fatalf("pending edit confirm = %q, want greeting", got.pendingEditConfirm)
-	}
-	if !strings.Contains(stripANSI(got.renderKeysBody()), "[确认]") {
-		t.Fatalf("edit confirmation missing:\n%s", stripANSI(got.renderKeysBody()))
-	}
-}
-
-func TestEditValueConfirmationOpensForm(t *testing.T) {
-	m := polishTestModel()
-	m.pendingEditConfirm = "greeting"
-
-	next, _ := m.Update(clickTokenMsg(t, m, "[Confirm]"))
-	got := next.(Model)
-	if got.pendingEditConfirm != "" {
-		t.Fatal("edit confirmation was not cleared")
-	}
-	if got.keyForm == nil || got.keyForm.mode != keyFormEditValue {
-		t.Fatalf("key form = %#v, want edit value form", got.keyForm)
-	}
-}
-
-func TestDeleteKeyRequiresTwoConfirmations(t *testing.T) {
-	m := polishTestModel()
-	m.pendingDelete = []string{"greeting"}
-	m.deleteConfirmStage = 0
-
-	next, cmd := m.Update(clickTokenMsg(t, m, "[Confirm]"))
-	got := next.(Model)
-	if cmd != nil {
-		t.Fatal("first confirmation must not delete the key")
-	}
-	if got.pendingDelete == nil || got.deleteConfirmStage != 1 {
-		t.Fatal("delete did not advance to second confirmation")
-	}
-
-	next, cmd = got.Update(clickTokenMsg(t, got, "[Y] Delete"))
-	got = next.(Model)
-	if got.pendingDelete != nil {
-		t.Fatal("delete confirmation was not cleared")
-	}
-	if cmd == nil {
-		t.Fatal("second confirmation did not delete the key")
 	}
 }

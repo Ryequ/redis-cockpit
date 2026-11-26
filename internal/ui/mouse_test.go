@@ -69,7 +69,7 @@ func TestMouseClickFocusedFieldWorks(t *testing.T) {
 	got := next.(Model)
 	got.profileForm.setFocus(profileFieldAddr)
 
-	next, _ = got.Update(clickTokenMsg(t, got, "Name:"))
+	next, _ = got.Update(clickTokenMsg(t, got, got.btnLabel("Name:")))
 	got = next.(Model)
 	if got.profileForm.focus != profileFieldName {
 		t.Fatalf("focus = %d, want name field", got.profileForm.focus)
@@ -158,7 +158,7 @@ func TestMouseClickFieldRowFocusesField(t *testing.T) {
 
 	next, _ := m.Update(clickTokenMsg(t, m, "[N new]"))
 	got := next.(Model)
-	next, _ = got.Update(clickTokenMsg(t, got, "Address:"))
+	next, _ = got.Update(clickTokenMsg(t, got, got.btnLabel("Address:")))
 	got = next.(Model)
 
 	if got.profileForm.focus != profileFieldAddr {
@@ -175,7 +175,7 @@ func TestMouseClickAnywhereOnEditFormRowFocusesField(t *testing.T) {
 
 	next, _ := m.Update(clickTokenMsg(t, m, "[E edit]"))
 	got := next.(Model)
-	x, y, width, ok := locateLineContaining(got.View(), "Address:")
+	x, y, width, ok := locateLineContaining(got.View(), got.btnLabel("Address:"))
 	if !ok {
 		t.Fatal("address row not found")
 	}
@@ -207,12 +207,7 @@ func TestMouseClickYesConfirmsDelete(t *testing.T) {
 	m.setView(ViewKeys)
 	m.pendingDelete = []string{"sample:key"}
 
-	next, _ := m.Update(clickTokenMsg(t, m, "[Confirm]"))
-	first := next.(Model)
-	if first.deleteConfirmStage != 1 {
-		t.Fatal("delete confirmation did not advance to second stage")
-	}
-	next, _ = first.Update(clickTokenMsg(t, first, "[Y] Delete"))
+	next, _ := m.Update(clickTokenMsg(t, m, "[Y] Delete"))
 	got := next.(Model)
 	if got.pendingDelete != nil {
 		t.Fatal("delete confirmation was not cleared")
@@ -224,7 +219,7 @@ func TestMouseClickNoCancelsDelete(t *testing.T) {
 	m.setView(ViewKeys)
 	m.pendingDelete = []string{"sample:key"}
 
-	next, _ := m.Update(clickTokenMsg(t, m, "[Cancel]"))
+	next, _ := m.Update(clickTokenMsg(t, m, "[N] Cancel"))
 	got := next.(Model)
 	if got.pendingDelete != nil {
 		t.Fatal("delete confirmation was not cancelled")
