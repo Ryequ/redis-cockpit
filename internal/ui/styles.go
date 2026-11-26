@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 )
 
 var bracketButtonPattern = regexp.MustCompile(`\[[^\]\n]+\]`)
@@ -108,6 +109,14 @@ func applyTheme(name string) {
 	activeButtonStyle = lipgloss.NewStyle().Bold(true).Foreground(p.buttonBG).Background(violet).Padding(0, 1)
 }
 
+func padToDisplayWidth(value string, width int) string {
+	current := runewidth.StringWidth(value)
+	if current >= width {
+		return value
+	}
+	return value + strings.Repeat(" ", width-current)
+}
+
 func button(label string) string {
 	return buttonStyle.Render(label)
 }
@@ -118,6 +127,12 @@ func activeButton(label string) string {
 
 func styleButtons(line string) string {
 	return bracketButtonPattern.ReplaceAllStringFunc(line, button)
+}
+
+func styleButtonsForLanguage(language, line string) string {
+	return bracketButtonPattern.ReplaceAllStringFunc(line, func(label string) string {
+		return button(buttonLabel(language, label))
+	})
 }
 
 func buttonRow(labels ...string) string {

@@ -65,6 +65,7 @@ type Model struct {
 	readOnly             bool
 	policy               security.Policy
 	selectedProfile      int
+	profileScroll        int
 	profileSearch        textinput.Model
 	profileSearchMode    bool
 	profileSort          profileSortKey
@@ -84,20 +85,18 @@ type Model struct {
 	lastResult           result.Value
 	pendingCommand       []string
 
-	keys               []adapters.KeyInfo
-	keyCursor          uint64
-	selectedKey        int
-	selectedValue      result.Value
-	filterInput        textinput.Model
-	filterMode         bool
-	pendingDelete      []string
-	deleteConfirmStage int
-	pendingEditConfirm string
-	keyForm            *keyForm
-	pendingKeyFocus    string
-	keyTreeMode        bool
-	keyTreeExpanded    map[string]bool
-	keyScroll          int
+	keys            []adapters.KeyInfo
+	keyCursor       uint64
+	selectedKey     int
+	selectedValue   result.Value
+	filterInput     textinput.Model
+	filterMode      bool
+	pendingDelete   []string
+	keyForm         *keyForm
+	pendingKeyFocus string
+	keyTreeMode     bool
+	keyTreeExpanded map[string]bool
+	keyScroll       int
 
 	opsManager     *ops.Manager
 	opsSnapshot    ops.Snapshot
@@ -130,12 +129,12 @@ func NewModelWithConfig(cfg config.Config, readOnly bool) Model {
 	input.CharLimit = 4096
 
 	filter := textinput.New()
-	filter.Placeholder = "*"
+	filter.Placeholder = tr(language, "keyword or *")
 	filter.Prompt = "/"
 	filter.CharLimit = 256
 
 	profileSearch := textinput.New()
-	profileSearch.Placeholder = "filter profiles"
+	profileSearch.Placeholder = tr(language, "filter profiles")
 	profileSearch.Prompt = "/"
 	profileSearch.CharLimit = 256
 
@@ -196,6 +195,9 @@ func (m *Model) setLanguage(language string) {
 	}
 	m.language = language
 	m.cfg.Language = language
+	m.profileSearch.Placeholder = tr(language, "filter profiles")
+	m.filterInput.Placeholder = tr(language, "keyword or *")
+	m.commandInput.Placeholder = tr(language, "SET greeting hello")
 	if err := m.saveConfig(); err != nil {
 		m.setStatus("Save failed: " + err.Error())
 		return

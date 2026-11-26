@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Ryequ/redis-cockpit/internal/ops"
 	"github.com/Ryequ/redis-cockpit/internal/redis"
@@ -182,33 +185,52 @@ type valueCopiedMsg struct {
 	err error
 }
 
+type clipboardCommandSpec struct {
+	name string
+	args []string
+}
+
+var (
+	newClipboardCommand           = clipboardCommand
+	clipboardWriter     io.Writer = os.Stdout
+)
+
 func copyValueCmd(value string, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		cmd := clipboardCommand(value)
-		if cmd == nil {
-			return valueCopiedMsg{gen: gen, err: errors.New("clipboard command not available")}
+		if spec := newClipboardCommand(value); spec != nil {
+			cmd := exec.Command(spec.name, spec.args...)
+			cmd.Stdin = strings.NewReader(value)
+			var stderr strings.Builder
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err == nil {
+				return valueCopiedMsg{gen: gen}
+			}
 		}
-		var stderr strings.Builder
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err != nil {
-			return valueCopiedMsg{gen: gen, err: fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))}
+		if _, err := io.WriteString(clipboardWriter, ansi.SetSystemClipboard(value)); err != nil {
+			return valueCopiedMsg{gen: gen, err: fmt.Errorf("write OSC52 clipboard: %w", err)}
 		}
 		return valueCopiedMsg{gen: gen}
 	}
 }
 
-func clipboardCommand(value string) *exec.Cmd {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("clip")
-	case "darwin":
-		cmd = exec.Command("pbcopy")
-	default:
-		cmd = exec.Command("xclip", "-selection", "clipboard")
+func clipboardCommand(string) *clipboardCommandSpec {
+	candidates := []clipboardCommandSpec{
+		{name: "wl-copy"},
+		{name: "xclip", args: []string{"-selection", "clipboard"}},
+		{name: "xsel", args: []string{"--input", "--clipboard"}},
 	}
-	cmd.Stdin = strings.NewReader(value)
-	return cmd
+	if runtime.GOOS == "darwin" {
+		candidates = append([]clipboardCommandSpec{{name: "pbcopy"}}, candidates...)
+	}
+	if runtime.GOOS == "windows" {
+		candidates = append([]clipboardCommandSpec{{name: "clip"}}, candidates...)
+	}
+	for _, spec := range candidates {
+		if _, err := exec.LookPath(spec.name); err == nil {
+			return &spec
+		}
+	}
+	return nil
 }
 
 type keyWrittenMsg struct {

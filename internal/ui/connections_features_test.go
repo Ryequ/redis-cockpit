@@ -53,7 +53,7 @@ func TestProfileGroupingAddsGroupHeaders(t *testing.T) {
 	m.profileGroupByMode = true
 
 	view := m.renderConnectionsBody()
-	if !strings.Contains(view, "Group: single+TLS") || !strings.Contains(view, "Group: single") {
+	if !strings.Contains(view, m.txt("Group: ")+m.txt("single")+"+TLS") || !strings.Contains(view, m.txt("Group: ")+m.txt("single")) {
 		t.Fatalf("group headers missing:\n%s", view)
 	}
 }
@@ -66,13 +66,14 @@ func TestSelectedAndActiveProfilesAreMarked(t *testing.T) {
 	if !strings.Contains(view, "▸") {
 		t.Fatal("selected marker missing")
 	}
-	if !strings.Contains(view, "active") {
+	if !strings.Contains(view, strings.TrimSpace(m.txt("  active"))) {
 		t.Fatal("active marker missing")
 	}
 }
 
 func TestConnectionsSummaryPanelsShowServerMemoryStats(t *testing.T) {
 	m := featureTestModel()
+	m.language = "en"
 	m.width = 140
 	m.opsSnapshot.Info = map[string]map[string]string{
 		"Server": {
@@ -85,8 +86,10 @@ func TestConnectionsSummaryPanelsShowServerMemoryStats(t *testing.T) {
 			"used_memory_peak_human": "2.40M",
 			"used_memory_lua_human":  "37.0K",
 		},
+		"Clients": {
+			"connected_clients": "5",
+		},
 		"Stats": {
-			"connected_clients":          "5",
 			"total_connections_received": "99",
 			"total_commands_processed":   "1024",
 		},
@@ -125,7 +128,7 @@ func TestProfileHealthShownInList(t *testing.T) {
 	}
 
 	view := m.renderConnectionsBody()
-	for _, want := range []string{"OK", "12ms", "v7.2.4"} {
+	for _, want := range []string{m.txt("OK"), "12ms", "v7.2.4"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("health missing %q:\n%s", want, view)
 		}
@@ -353,7 +356,7 @@ func TestFormButtonsVisibleInShortTerminal(t *testing.T) {
 	got := next.(Model)
 
 	view := got.View()
-	if !strings.Contains(view, "[Save]") || !strings.Contains(view, "[Cancel]") {
+	if !strings.Contains(view, m.btnLabel("[Save]")) || !strings.Contains(view, m.btnLabel("[Cancel]")) {
 		t.Fatalf("form buttons missing in short terminal:\n%s", view)
 	}
 }

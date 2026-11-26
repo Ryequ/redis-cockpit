@@ -18,7 +18,7 @@ import (
 )
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return tea.EnableBracketedPaste
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -98,10 +98,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleDeleteConfirmation(msg)
 	}
 
-	if m.pendingEditConfirm != "" {
-		return m.handleEditConfirmation(msg)
-	}
-
 	if m.pendingCommand != nil {
 		return m.handleConfirmation(msg)
 	}
@@ -120,6 +116,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	if m.keyForm != nil {
 		return m.handleKeyFormKey(msg)
+	}
+
+	if m.activeView == ViewKeys && m.filterMode {
+		return m.handleKeysViewKey(msg)
+	}
+	if m.activeView == ViewConnections && m.profileSearchMode {
+		return m.handleConnectionsKey(msg)
 	}
 
 	if isCycleForward(msg) {
@@ -228,17 +231,17 @@ func (m Model) handleConnectionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case 'i':
-			form := newProfileIOForm(profileIOImport)
+			form := newProfileIOFormWithLanguage(profileIOImport, m.language)
 			m.profileIOForm = &form
 			m.setStatus("Import profiles")
 			return m, nil
 		case 'x':
-			form := newProfileIOForm(profileIOExport)
+			form := newProfileIOFormWithLanguage(profileIOExport, m.language)
 			m.profileIOForm = &form
 			m.setStatus("Export profiles")
 			return m, nil
 		case 'n':
-			form := newProfileForm(redis.ConnectionProfile{}, profileCreate)
+			form := newProfileFormWithLanguage(redis.ConnectionProfile{}, profileCreate, m.language)
 			m.profileForm = &form
 			m.setStatus("New connection profile")
 			return m, nil
@@ -250,7 +253,7 @@ func (m Model) handleConnectionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case 'e':
 			if len(m.cfg.Profiles) > 0 {
-				form := newProfileForm(m.cfg.Profiles[m.selectedProfile], profileEdit)
+				form := newProfileFormWithLanguage(m.cfg.Profiles[m.selectedProfile], profileEdit, m.language)
 				m.profileForm = &form
 				m.setStatus("Editing connection profile")
 			}
@@ -281,6 +284,12 @@ func (m Model) handleConnectionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyDown:
 		m.selectNextProfile()
+		return m, nil
+	case tea.KeyPgUp:
+		m.scrollProfileList(-m.profileListHeight())
+		return m, nil
+	case tea.KeyPgDown:
+		m.scrollProfileList(m.profileListHeight())
 		return m, nil
 	case tea.KeyEnter:
 		profile := m.cfg.Profiles[m.selectedProfile]
@@ -576,15 +585,26 @@ func (m Model) handleConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if msg.Action == tea.MouseActionPress && m.activeView == ViewKeys &&
-		m.keyForm == nil && m.pendingDelete == nil && !m.showHelpModal {
-		switch msg.Button {
-		case tea.MouseButtonWheelUp:
-			m.scrollKeyList(-1)
-			return m, nil
-		case tea.MouseButtonWheelDown:
-			m.scrollKeyList(1)
-			return m, nil
+	if msg.Action == tea.MouseActionPress && m.keyForm == nil && m.pendingDelete == nil && !m.showHelpModal {
+		switch m.activeView {
+		case ViewKeys:
+			switch msg.Button {
+			case tea.MouseButtonWheelUp:
+				m.scrollKeyList(-1)
+				return m, nil
+			case tea.MouseButtonWheelDown:
+				m.scrollKeyList(1)
+				return m, nil
+			}
+		case ViewConnections:
+			switch msg.Button {
+			case tea.MouseButtonWheelUp:
+				m.scrollProfileList(-1)
+				return m, nil
+			case tea.MouseButtonWheelDown:
+				m.scrollProfileList(1)
+				return m, nil
+			}
 		}
 	}
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
@@ -610,30 +630,11 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.pendingDelete != nil {
-		if m.deleteConfirmStage == 0 {
-			switch {
-			case m.clickAction(msg, view, "[Confirm]"):
-				return m.handleDeleteConfirmation(keyFromRune('y'))
-			case m.clickAction(msg, view, "[Cancel]"):
-				return m.handleDeleteConfirmation(keyFromRune('n'))
-			}
-			return m, nil
-		}
 		switch {
-		case m.clickAction(msg, view, "[Y] Delete"):
+		case m.clickAction(msg, view, "[Y] Delete"), m.clickAction(msg, view, "[Confirm]"):
 			return m.handleDeleteConfirmation(keyFromRune('y'))
-		case m.clickAction(msg, view, "[N] Cancel"):
+		case m.clickAction(msg, view, "[N] Cancel"), m.clickAction(msg, view, "[Cancel]"):
 			return m.handleDeleteConfirmation(keyFromRune('n'))
-		}
-		return m, nil
-	}
-
-	if m.pendingEditConfirm != "" {
-		switch {
-		case m.clickAction(msg, view, "[Confirm]"):
-			return m.handleEditConfirmation(keyFromRune('y'))
-		case m.clickAction(msg, view, "[Cancel]"):
-			return m.handleEditConfirmation(keyFromRune('n'))
 		}
 		return m, nil
 	}
@@ -657,7 +658,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 		for i, label := range m.keyForm.labels {
 			if clickLineContaining(msg, view, label+":") {
-				m.keyForm.focus = i
+				m.keyForm.setFocus(i)
 				return m, nil
 			}
 		}
@@ -783,14 +784,15 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		for i, key := range m.keys {
-			if clickLineContaining(msg, view, key.Name+"  [") {
-				m.selectedKey = i
-				m.setStatus("Selected " + key.Name)
-				if m.adapter != nil {
-					return m, loadValueCmd(m.adapter, key, m.generation)
-				}
-				return m, nil
+		for _, row := range m.visibleKeyRows() {
+			if row.keyIndex < 0 || row.expandable {
+				continue
+			}
+			if clickLineContaining(msg, view, row.label+"  [") {
+				m.selectedKey = row.keyIndex
+				m.setStatus("Selected " + m.keys[row.keyIndex].Name)
+				m.ensureKeyVisible()
+				return m, m.loadSelectedValueCmd()
 			}
 		}
 	case ViewWorkbench:
@@ -990,6 +992,10 @@ func (m Model) handleKeyFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if form == nil {
 		return m, nil
 	}
+	if msg.Type == tea.KeyRunes && msg.Paste {
+		form.inputs[form.focus].Paste(string(msg.Runes))
+		return m, nil
+	}
 	switch msg.Type {
 	case tea.KeyEsc:
 		m.keyForm = nil
@@ -1013,6 +1019,11 @@ func (m Model) handleKeyFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			_ = m.auditRecord([]string{"SET", key, form.inputs[keyCreateValueField].Value()})
 			return m, createKeyCmd(m.adapter, key, form.inputs[keyCreateValueField].Value(), m.generation)
 		}
+		if !form.pendingConfirm {
+			form.pendingConfirm = true
+			m.setStatus(m.txt("Confirm edit value?"))
+			return m, nil
+		}
 		if strings.TrimSpace(form.key) == "" {
 			m.setStatus("No key selected")
 			m.keyForm = nil
@@ -1023,8 +1034,7 @@ func (m Model) handleKeyFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		_ = m.auditRecord([]string{"SET", form.key, value})
 		return m, updateKeyValueCmd(m.adapter, form.key, value, form.ttl, m.generation)
 	}
-	updated, cmd := form.inputs[form.focus].Update(msg)
-	form.inputs[form.focus] = updated
+	cmd := form.inputs[form.focus].Update(msg)
 	return m, cmd
 }
 
@@ -1056,7 +1066,14 @@ func (m Model) handleKeysLoaded(msg keysLoadedMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.setStatus(fmt.Sprintf("Loaded %d keys", len(m.keys)))
-	return m, nil
+	return m, m.loadSelectedValueCmd()
+}
+
+func (m Model) loadSelectedValueCmd() tea.Cmd {
+	if m.adapter == nil || m.selectedKey < 0 || m.selectedKey >= len(m.keys) {
+		return nil
+	}
+	return loadValueCmd(m.adapter, m.keys[m.selectedKey], m.generation)
 }
 
 func (m Model) handleValueLoaded(msg valueLoadedMsg) (tea.Model, tea.Cmd) {
@@ -1105,10 +1122,10 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyUp:
 		m.selectPreviousKey()
-		return m, nil
+		return m, m.loadSelectedValueCmd()
 	case tea.KeyDown:
 		m.selectNextKey()
-		return m, nil
+		return m, m.loadSelectedValueCmd()
 	case tea.KeyPgUp:
 		m.scrollKeyList(-m.keyListHeight())
 		return m, nil
@@ -1145,7 +1162,7 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Creating keys is blocked in read-only mode")
 			return m, nil
 		}
-		form := newKeyCreateForm()
+		form := newKeyCreateFormWithLanguage(m.language)
 		m.keyForm = &form
 		m.setStatus("New key")
 		return m, nil
@@ -1162,19 +1179,24 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Value editing supports string keys; found " + info.Type)
 			return m, nil
 		}
-		m.pendingEditConfirm = info.Name
-		m.setStatus("Confirm edit for " + info.Name)
+		form := newKeyEditValueFormWithLanguage(info.Name, m.selectedValue.Display(), info.TTL, m.language)
+		m.keyForm = &form
+		m.setStatus(m.txt("Edit value for ") + info.Name)
 		return m, nil
 	case 'k':
 		m.selectPreviousKey()
+		return m, m.loadSelectedValueCmd()
 	case 'j':
 		m.selectNextKey()
+		return m, m.loadSelectedValueCmd()
 	case 'r':
 		return m, m.refreshKeysCmd()
 	case 'n':
 		if m.keyHasMore {
 			return m, m.keysPageCmd(m.keyCursor)
 		}
+		m.setStatus(m.txt("No more keys"))
+		return m, nil
 	case '/':
 		m.filterMode = true
 		return m, m.filterInput.Focus()
@@ -1185,7 +1207,6 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.selectedKey >= 0 && m.selectedKey < len(m.keys) {
 			m.pendingDelete = []string{m.keys[m.selectedKey].Name}
-			m.deleteConfirmStage = 0
 			m.setStatus("Confirm delete: press y or n")
 		}
 	}
@@ -1195,7 +1216,6 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleDeleteConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.Type == tea.KeyEsc {
 		m.pendingDelete = nil
-		m.deleteConfirmStage = 0
 		m.setStatus(m.txt("Delete cancelled"))
 		return m, nil
 	}
@@ -1204,50 +1224,14 @@ func (m Model) handleDeleteConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	switch msg.Runes[0] {
 	case 'y', 'Y', 'd', 'D':
-		if m.deleteConfirmStage == 0 {
-			m.deleteConfirmStage = 1
-			m.setStatus(m.txt("Delete confirmed once; confirm again"))
-			return m, nil
-		}
 		keys := m.pendingDelete
 		m.pendingDelete = nil
-		m.deleteConfirmStage = 0
 		_ = m.auditRecord(append([]string{"DEL"}, keys...))
 		return m, deleteKeysCmd(m.adapter, keys, m.generation)
 	case 'n', 'N':
 		m.pendingDelete = nil
-		m.deleteConfirmStage = 0
 		m.setStatus(m.txt("Delete cancelled"))
 		return m, nil
-	}
-	return m, nil
-}
-
-func (m Model) handleEditConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	name := m.pendingEditConfirm
-	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
-		switch msg.Runes[0] {
-		case 'y', 'Y', 'v', 'V':
-			m.pendingEditConfirm = ""
-			for _, info := range m.keys {
-				if info.Name == name {
-					form := newKeyEditValueForm(info.Name, m.selectedValue.Display(), info.TTL)
-					m.keyForm = &form
-					m.setStatus(m.txt("Edit value for ") + info.Name)
-					return m, nil
-				}
-			}
-			m.setStatus(m.txt("Key not found"))
-			return m, nil
-		case 'n', 'N':
-			m.pendingEditConfirm = ""
-			m.setStatus(m.txt("Edit cancelled"))
-			return m, nil
-		}
-	}
-	if msg.Type == tea.KeyEsc {
-		m.pendingEditConfirm = ""
-		m.setStatus(m.txt("Edit cancelled"))
 	}
 	return m, nil
 }
@@ -1256,14 +1240,22 @@ func (m Model) refreshKeysCmd() tea.Cmd {
 	return m.keysPageCmd(0)
 }
 
+func keyMatchPattern(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "*" {
+		return "*"
+	}
+	if strings.ContainsAny(value, "*?[]") {
+		return value
+	}
+	return "*" + value + "*"
+}
+
 func (m Model) keysPageCmd(cursor uint64) tea.Cmd {
 	if m.adapter == nil {
 		return nil
 	}
-	match := m.filterInput.Value()
-	if match == "" {
-		match = "*"
-	}
+	match := keyMatchPattern(m.filterInput.Value())
 	count := int64(m.cfg.PageSize)
 	if count <= 0 {
 		count = 100
