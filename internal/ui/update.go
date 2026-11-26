@@ -7,7 +7,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Ryequ/redis-cockpit/internal/command"
+	"github.com/Ryequ/redis-cockpit/internal/config"
 	"github.com/Ryequ/redis-cockpit/internal/ops"
+	"github.com/Ryequ/redis-cockpit/internal/redis"
 	"github.com/Ryequ/redis-cockpit/internal/redis/adapters"
 	"github.com/Ryequ/redis-cockpit/internal/result"
 	"github.com/Ryequ/redis-cockpit/internal/security"
@@ -22,6 +24,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case connectedMsg:
 		return m.handleConnected(msg)
+	case profileTestedMsg:
+		return m.handleProfileTested(msg)
 	case commandExecutedMsg:
 		return m.handleCommandExecuted(msg)
 	case keysLoadedMsg:
@@ -85,6 +89,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleConfirmation(msg)
 	}
 
+	if m.pendingProfileDelete != "" {
+		return m.handleProfileDeleteConfirmation(msg)
+	}
+
+	if m.profileForm != nil {
+		return m.handleProfileFormKey(msg)
+	}
+
 	if isCycleForward(msg) {
 		m.nextView(1)
 		return m, nil
@@ -129,6 +141,42 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleConnectionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		switch msg.Runes[0] {
+		case 'n':
+			form := newProfileForm(redis.ConnectionProfile{}, profileCreate)
+			m.profileForm = &form
+			m.setStatus("New connection profile")
+			return m, nil
+		case 'k':
+			m.selectPreviousProfile()
+			return m, nil
+		case 'j':
+			m.selectNextProfile()
+			return m, nil
+		case 'e':
+			if len(m.cfg.Profiles) > 0 {
+				form := newProfileForm(m.cfg.Profiles[m.selectedProfile], profileEdit)
+				m.profileForm = &form
+				m.setStatus("Editing connection profile")
+			}
+			return m, nil
+		case 'd':
+			if len(m.cfg.Profiles) > 0 {
+				m.pendingProfileDelete = m.cfg.Profiles[m.selectedProfile].Name
+				m.setStatus("Delete profile? press y to confirm, n to cancel")
+			}
+			return m, nil
+		case 't':
+			if len(m.cfg.Profiles) > 0 {
+				profile := m.cfg.Profiles[m.selectedProfile]
+				m.setStatus("Testing " + profile.Name + "...")
+				return m, testConnectionCmd(profile, m.generation)
+			}
+			return m, nil
+		}
+	}
+
 	if len(m.cfg.Profiles) == 0 {
 		return m, nil
 	}
@@ -145,16 +193,153 @@ func (m Model) handleConnectionsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.setStatus("Connecting to " + profile.Name + "...")
 		return m, connectCmd(profile, m.generation)
 	}
+	return m, nil
+}
 
-	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
-		switch msg.Runes[0] {
-		case 'k':
-			m.selectPreviousProfile()
-		case 'j':
-			m.selectNextProfile()
+func (m Model) handleProfileFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	form := m.profileForm
+	if form == nil {
+		return m, nil
+	}
+
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.profileForm = nil
+		m.setStatus("Profile edit cancelled")
+		return m, nil
+	case tea.KeyEnter:
+		profile, err := form.profile()
+		if err != nil {
+			m.setStatus("Invalid profile: " + err.Error())
+			return m, nil
 		}
+		for _, existing := range m.cfg.Profiles {
+			if existing.Name == profile.Name && existing.Name != form.originalName {
+				m.setStatus("Profile already exists: " + profile.Name)
+				return m, nil
+			}
+		}
+
+		beforeProfiles := append([]redis.ConnectionProfile(nil), m.cfg.Profiles...)
+		beforeActive := m.cfg.ActiveProfile
+		if form.mode == profileEdit && form.originalName != profile.Name {
+			m.cfg.DeleteProfile(form.originalName)
+		}
+		if err := m.cfg.UpsertProfile(profile); err != nil {
+			m.cfg.Profiles = beforeProfiles
+			m.cfg.ActiveProfile = beforeActive
+			m.setStatus("Invalid profile: " + err.Error())
+			return m, nil
+		}
+		m.cfg.ActiveProfile = profile.Name
+		if err := m.saveConfig(); err != nil {
+			m.cfg.Profiles = beforeProfiles
+			m.cfg.ActiveProfile = beforeActive
+			m.setStatus("Save failed: " + err.Error())
+			return m, nil
+		}
+		for i, existing := range m.cfg.Profiles {
+			if existing.Name == profile.Name {
+				m.selectedProfile = i
+				break
+			}
+		}
+		m.cfg.ActiveProfile = profile.Name
+		m.profileForm = nil
+		m.setStatus("Profile saved: " + profile.Name)
+		return m, nil
+	case tea.KeyTab:
+		form.nextFocus()
+		return m, nil
+	case tea.KeyShiftTab:
+		form.prevFocus()
+		return m, nil
+	case tea.KeySpace:
+		if form.focus >= profileFieldCount {
+			form.toggleBool()
+			return m, nil
+		}
+		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}}
+	}
+
+	if form.focus < profileFieldCount {
+		updated, cmd := form.inputs[form.focus].Update(msg)
+		form.inputs[form.focus] = updated
+		return m, cmd
 	}
 	return m, nil
+}
+
+func (m Model) handleProfileDeleteConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	name := m.pendingProfileDelete
+	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
+		switch msg.Runes[0] {
+		case 'y', 'Y':
+			m.pendingProfileDelete = ""
+			beforeProfiles := append([]redis.ConnectionProfile(nil), m.cfg.Profiles...)
+			beforeActive := m.cfg.ActiveProfile
+			beforeSelected := m.selectedProfile
+			if !m.cfg.DeleteProfile(name) {
+				m.setStatus("Profile not found: " + name)
+				return m, nil
+			}
+			if m.cfg.ActiveProfile == "" && len(m.cfg.Profiles) > 0 {
+				m.cfg.ActiveProfile = m.cfg.Profiles[0].Name
+			}
+			if m.selectedProfile >= len(m.cfg.Profiles) {
+				m.selectedProfile = len(m.cfg.Profiles) - 1
+			}
+			if m.selectedProfile < 0 {
+				m.selectedProfile = 0
+			}
+			if err := m.saveConfig(); err != nil {
+				m.cfg.Profiles = beforeProfiles
+				m.cfg.ActiveProfile = beforeActive
+				m.selectedProfile = beforeSelected
+				m.setStatus("Save failed: " + err.Error())
+				return m, nil
+			}
+			m.setStatus("Profile deleted: " + name)
+			return m, nil
+		case 'n', 'N':
+			m.pendingProfileDelete = ""
+			m.setStatus("Delete cancelled")
+			return m, nil
+		}
+	}
+	if msg.Type == tea.KeyEsc {
+		m.pendingProfileDelete = ""
+		m.setStatus("Delete cancelled")
+	}
+	return m, nil
+}
+
+func (m Model) handleProfileTested(msg profileTestedMsg) (tea.Model, tea.Cmd) {
+	if msg.gen != m.generation {
+		return m, nil
+	}
+	name := msg.name
+	if name == "" {
+		name = "connection"
+	}
+	if msg.err != nil {
+		m.setStatus("Test failed for " + name + ": " + msg.err.Error())
+		return m, nil
+	}
+	m.setStatus("Test OK: " + name)
+	return m, nil
+}
+
+func (m *Model) saveConfig() error {
+	path := m.configPath
+	if path == "" {
+		defaultPath, err := config.DefaultPath()
+		if err != nil {
+			return err
+		}
+		path = defaultPath
+	}
+	return config.Save(path, m.cfg)
 }
 
 func (m Model) handleWorkbenchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

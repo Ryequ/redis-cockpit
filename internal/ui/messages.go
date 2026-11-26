@@ -24,6 +24,12 @@ type connectedMsg struct {
 	err      error
 }
 
+type profileTestedMsg struct {
+	gen  uint64
+	name string
+	err  error
+}
+
 type commandExecutedMsg struct {
 	gen   uint64
 	line  string
@@ -33,14 +39,10 @@ type commandExecutedMsg struct {
 
 func connectCmd(profile redis.ConnectionProfile, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		timeout := time.Duration(profile.TimeoutSeconds) * time.Second
-		if timeout <= 0 {
-			timeout = 5 * time.Second
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), profileTimeout(profile))
 		defer cancel()
 
-		client, err := redis.NewClient(ctx, profile)
+		client, err := redis.NewClient(ctx, profile.Expanded())
 		if err != nil {
 			return connectedMsg{gen: gen, err: err}
 		}
@@ -50,6 +52,29 @@ func connectCmd(profile redis.ConnectionProfile, gen uint64) tea.Cmd {
 		}
 		return connectedMsg{gen: gen, profile: profile, executor: redis.NewExecutor(client)}
 	}
+}
+
+func testConnectionCmd(profile redis.ConnectionProfile, gen uint64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), profileTimeout(profile))
+		defer cancel()
+
+		client, err := redis.NewClient(ctx, profile.Expanded())
+		if err != nil {
+			return profileTestedMsg{gen: gen, name: profile.Name, err: err}
+		}
+		err = client.Ping(ctx).Err()
+		_ = client.Close()
+		return profileTestedMsg{gen: gen, name: profile.Name, err: err}
+	}
+}
+
+func profileTimeout(profile redis.ConnectionProfile) time.Duration {
+	timeout := time.Duration(profile.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		return 5 * time.Second
+	}
+	return timeout
 }
 
 func executeCmd(executor *redis.Executor, argv []string, gen uint64) tea.Cmd {

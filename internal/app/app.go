@@ -58,6 +58,7 @@ func Run(opts Options) error {
 	}
 
 	model := ui.NewModelWithConfig(cfg, readOnly)
+	model.SetConfigPath(path)
 
 	auditDir := filepath.Dir(path)
 	if path == "" {

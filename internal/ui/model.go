@@ -51,17 +51,20 @@ type Model struct {
 	status        string
 	showHelpModal bool
 
-	cfg             config.Config
-	readOnly        bool
-	policy          security.Policy
-	selectedProfile int
-	client          goredis.UniversalClient
-	executor        *redis.Executor
-	adapter         *adapters.Manager
-	history         *command.History
-	commandInput    textinput.Model
-	lastResult      result.Value
-	pendingCommand  []string
+	cfg                  config.Config
+	configPath           string
+	profileForm          *profileForm
+	pendingProfileDelete string
+	readOnly             bool
+	policy               security.Policy
+	selectedProfile      int
+	client               goredis.UniversalClient
+	executor             *redis.Executor
+	adapter              *adapters.Manager
+	history              *command.History
+	commandInput         textinput.Model
+	lastResult           result.Value
+	pendingCommand       []string
 
 	keys          []adapters.KeyInfo
 	keyCursor     uint64
@@ -141,6 +144,10 @@ func (m *Model) SetMouseEnabled(enabled bool) {
 
 func (m *Model) SetAuditLog(audit *security.AuditLog) {
 	m.audit = audit
+}
+
+func (m *Model) SetConfigPath(path string) {
+	m.configPath = path
 }
 
 func (m Model) Status() string { return m.status }

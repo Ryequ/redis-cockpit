@@ -58,15 +58,30 @@ go build -o bin/redis-cockpit.exe .
 
 首次启动时若配置文件不存在，会使用默认 `local` 连接档案（`127.0.0.1:6379`）。
 
-完整示例见 `config.example.yaml`。密码字段支持环境变量展开，例如：
+完整示例见 `config.example.yaml`。密码字段支持环境变量占位符，例如：
 
 ```yaml
 password: ${REDIS_TUI_PASSWORD}
 ```
 
-### 新增远程连接
+占位符只在建立连接时展开；通过 TUI 保存配置会保留占位符，不会把明文密码写回配置文件。
 
-当前 TUI 不提供连接档案的新增/编辑表单，请直接编辑配置文件中的 `profiles` 列表。例如：
+### 在 TUI 中管理连接
+
+按 `1` 进入 Connections 页面后：
+
+| 按键 | 功能 |
+| --- | --- |
+| `↑` / `↓` 或 `j` / `k` | 选择连接档案 |
+| `Enter` | 连接选中的 Redis 实例 |
+| `n` | 新建连接档案 |
+| `e` | 编辑选中的连接档案 |
+| `d` | 删除选中的连接档案，需按 `y` 确认 |
+| `t` | 测试选中的连接 |
+
+新增和编辑使用表单，支持 `Tab` / `Shift+Tab` 切换字段、`Space` 切换 TLS / Cluster / Sentinel / 只读等开关、`Enter` 保存、`Esc` 取消。保存后会立即写入当前配置文件。
+
+也可以直接编辑配置文件中的 `profiles` 列表。例如：
 
 ```yaml
   - id: prod
@@ -76,14 +91,11 @@ password: ${REDIS_TUI_PASSWORD}
     password: ${REDIS_TUI_PASSWORD}
     db: 0
     tls: true
-    insecure_skip_verify: false
     cluster: false
     sentinel: false
     read_only: true
     timeout_seconds: 10
 ```
-
-密码建议通过环境变量注入，避免明文写入配置文件。修改配置后需重启工具；启动时可用 `--profile prod` 直接选择档案，也可在 Connections 页面用 `↑` / `↓` 选择后按 `Enter` 连接。
 
 Cluster 实例将 `cluster` 设为 `true`；Sentinel 实例将 `sentinel` 设为 `true` 并填写 `sentinel_addrs` 与 `master_name`。两种模式不能同时开启。
 

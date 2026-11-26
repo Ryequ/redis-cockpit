@@ -53,7 +53,22 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	}
 }
 
-func TestLoadExpandsPasswordEnvironmentVariable(t *testing.T) {
+func TestLoadPreservesEmptyProfilesFromFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := Save(path, Config{PageSize: 100, MaxPreview: 4096}); err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if len(got.Profiles) != 0 {
+		t.Fatalf("profiles = %#v, want empty", got.Profiles)
+	}
+}
+
+func TestLoadPreservesPasswordEnvironmentVariable(t *testing.T) {
 	t.Setenv("REDIS_TUI_TEST_PASSWORD", "s3cr3t")
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	cfg := Default()
@@ -66,7 +81,7 @@ func TestLoadExpandsPasswordEnvironmentVariable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load returned error: %v", err)
 	}
-	if got.Profiles[0].Password != "s3cr3t" {
-		t.Fatalf("password = %q, want %q", got.Profiles[0].Password, "s3cr3t")
+	if got.Profiles[0].Password != "${REDIS_TUI_TEST_PASSWORD}" {
+		t.Fatalf("password = %q, want %q", got.Profiles[0].Password, "${REDIS_TUI_TEST_PASSWORD}")
 	}
 }

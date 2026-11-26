@@ -53,6 +53,28 @@ func TestProfileValidateRejectsMissingFields(t *testing.T) {
 	}
 }
 
+func TestExpandedResolvesCredentialEnvironmentVariables(t *testing.T) {
+	t.Setenv("REDIS_TUI_TEST_PASSWORD", "s3cr3t")
+	t.Setenv("REDIS_TUI_TEST_USER", "appuser")
+
+	p := ConnectionProfile{
+		Name:     "prod",
+		Addr:     "redis.example.com:6379",
+		Username: "${REDIS_TUI_TEST_USER}",
+		Password: "${REDIS_TUI_TEST_PASSWORD}",
+	}
+	got := p.Expanded()
+	if got.Username != "appuser" {
+		t.Fatalf("username = %q, want appuser", got.Username)
+	}
+	if got.Password != "s3cr3t" {
+		t.Fatalf("password = %q, want s3cr3t", got.Password)
+	}
+	if p.Password != "${REDIS_TUI_TEST_PASSWORD}" {
+		t.Fatalf("original profile was mutated: %q", p.Password)
+	}
+}
+
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {

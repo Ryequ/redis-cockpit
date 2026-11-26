@@ -91,6 +91,10 @@ func (m Model) renderWorkspace(width, height int) string {
 }
 
 func (m Model) renderConnectionsBody() string {
+	if m.profileForm != nil {
+		return m.profileForm.View()
+	}
+
 	lines := []string{
 		lipgloss.NewStyle().Bold(true).Foreground(accent).Render("Connections"),
 		"",
@@ -130,7 +134,7 @@ func (m Model) renderConnectionsBody() string {
 			"  Auth   : "+authLabel(profile.Username, profile.Password),
 			"  Mode   : "+modeLabel(profile),
 			"",
-			"↑↓/j/k 选择  •  Enter 连接  •  鼠标点击列表项选择",
+			"↑↓/j/k 选择  •  Enter 连接  •  n 新增  •  e 编辑  •  d 删除  •  t 测试  •  鼠标点击列表项选择",
 		)
 	}
 	return strings.Join(lines, "\n")

@@ -3,6 +3,7 @@ package redis
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -22,6 +23,13 @@ type ConnectionProfile struct {
 	MasterName         string   `yaml:"master_name,omitempty" json:"master_name,omitempty"`
 	ReadOnly           bool     `yaml:"read_only" json:"read_only"`
 	TimeoutSeconds     int      `yaml:"timeout_seconds" json:"timeout_seconds"`
+}
+
+// Expanded returns a copy with credential environment variables resolved.
+func (p ConnectionProfile) Expanded() ConnectionProfile {
+	p.Username = os.ExpandEnv(p.Username)
+	p.Password = os.ExpandEnv(p.Password)
+	return p
 }
 
 func (p ConnectionProfile) Validate() error {

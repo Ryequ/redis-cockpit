@@ -62,13 +62,6 @@ func Load(path string) (Config, error) {
 	if cfg.MaxPreview <= 0 {
 		cfg.MaxPreview = 4096
 	}
-	if len(cfg.Profiles) == 0 {
-		cfg = Default()
-	}
-	for i := range cfg.Profiles {
-		cfg.Profiles[i].Password = os.ExpandEnv(cfg.Profiles[i].Password)
-		cfg.Profiles[i].Username = os.ExpandEnv(cfg.Profiles[i].Username)
-	}
 	return cfg, nil
 }
 
