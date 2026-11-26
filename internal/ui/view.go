@@ -248,6 +248,9 @@ func (m Model) renderWorkbenchBody() string {
 }
 
 func (m Model) renderKeysBody() string {
+	if m.keyForm != nil {
+		return m.keyForm.View()
+	}
 	lines := []string{
 		lipgloss.NewStyle().Bold(true).Foreground(accent).Render("Keys"),
 		"",
@@ -255,20 +258,15 @@ func (m Model) renderKeysBody() string {
 		"",
 		"Filter: " + m.filterInput.View(),
 		"",
-		subtitleStyle.Render("[Refresh] [Next] [Del]"),
+		subtitleStyle.Render("[Refresh] [Next] [New key] [Edit value] [Del] " + keyViewToggleLabel(m)),
 		"",
 		"Keys:",
 	}
 
 	if len(m.keys) == 0 {
 		lines = append(lines, subtitleStyle.Render("  (empty)"))
-	}
-	for i, key := range m.keys {
-		marker := "  "
-		if i == m.selectedKey {
-			marker = okStyle.Render("▸ ")
-		}
-		lines = append(lines, fmt.Sprintf("%s%s  [%s]  ttl=%s", marker, key.Name, key.Type, ttlLabel(key.TTL)))
+	} else {
+		lines = append(lines, m.renderKeyRows())
 	}
 
 	lines = append(lines, "", "Value:")
@@ -287,7 +285,7 @@ func (m Model) renderKeysBody() string {
 	if m.keyHasMore {
 		nextPageHint = "  •  n 下一页"
 	}
-	lines = append(lines, "", "↑↓/j/k 选择  •  Enter 查看值  •  / 筛选  •  r 刷新"+nextPageHint+"  •  d 删除")
+	lines = append(lines, "", "↑↓/j/k 选择  •  Enter 查看值  •  a 新增 Key  •  v 修改 Value  •  t 树/平铺  •  ←/→ 折叠/展开  •  滚轮/PgUp/PgDn 滚动  •  / 筛选  •  r 刷新"+nextPageHint+"  •  d 删除")
 	return strings.Join(lines, "\n")
 }
 

@@ -35,6 +35,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleValueLoaded(msg)
 	case keysDeletedMsg:
 		return m.handleKeysDeleted(msg)
+	case keyWrittenMsg:
+		return m.handleKeyWritten(msg)
 	case opsLoadedMsg:
 		return m.handleOpsLoaded(msg)
 	case subscribedMsg:
@@ -100,6 +102,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	if m.profileForm != nil {
 		return m.handleProfileFormKey(msg)
+	}
+
+	if m.keyForm != nil {
+		return m.handleKeyFormKey(msg)
 	}
 
 	if isCycleForward(msg) {
@@ -556,6 +562,17 @@ func (m Model) handleConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if msg.Action == tea.MouseActionPress && m.activeView == ViewKeys &&
+		m.keyForm == nil && m.pendingDelete == nil && !m.showHelpModal {
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			m.scrollKeyList(-1)
+			return m, nil
+		case tea.MouseButtonWheelDown:
+			m.scrollKeyList(1)
+			return m, nil
+		}
+	}
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return m, nil
 	}
@@ -594,6 +611,22 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m.handleConfirmation(keyFromRune('y'))
 		case clickToken(msg, view, "[N] Cancel"):
 			return m.handleConfirmation(keyFromRune('n'))
+		}
+		return m, nil
+	}
+
+	if m.keyForm != nil {
+		if clickToken(msg, view, "[OK]") {
+			return m.handleKeyFormKey(tea.KeyMsg{Type: tea.KeyEnter})
+		}
+		if clickToken(msg, view, "[Cancel]") {
+			return m.handleKeyFormKey(tea.KeyMsg{Type: tea.KeyEsc})
+		}
+		for i, label := range m.keyForm.labels {
+			if clickLineContaining(msg, view, label+":") {
+				m.keyForm.focus = i
+				return m, nil
+			}
 		}
 		return m, nil
 	}
@@ -704,8 +737,20 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m.handleKeysViewKey(keyFromRune('r'))
 		case clickToken(msg, view, "[Next]"):
 			return m.handleKeysViewKey(keyFromRune('n'))
+		case clickToken(msg, view, "[New key]"):
+			return m.handleKeysViewKey(keyFromRune('a'))
+		case clickToken(msg, view, "[Edit value]"):
+			return m.handleKeysViewKey(keyFromRune('v'))
 		case clickToken(msg, view, "[Del]"):
 			return m.handleKeysViewKey(keyFromRune('d'))
+		case clickToken(msg, view, "[Tree]"), clickToken(msg, view, "[Flat]"):
+			return m.handleKeysViewKey(keyFromRune('t'))
+		}
+		for _, row := range m.visibleKeyRows() {
+			if row.expandable && clickLineContaining(msg, view, row.label+"/") {
+				m.toggleKeyTreeNode(row.path)
+				return m, nil
+			}
 		}
 		for i, key := range m.keys {
 			if clickLineContaining(msg, view, key.Name+"  [") {
@@ -871,6 +916,66 @@ func (m *Model) closeClient() {
 	m.monitorEvents = nil
 }
 
+func (m Model) handleKeyWritten(msg keyWrittenMsg) (tea.Model, tea.Cmd) {
+	if msg.gen != m.generation {
+		return m, nil
+	}
+	if msg.err != nil {
+		m.setStatus("Key write failed: " + msg.err.Error())
+		return m, nil
+	}
+	info := adapters.KeyInfo{Name: msg.key, Type: "string"}
+	if m.pendingKeyFocus != "" {
+		m.setStatus("Created key: " + msg.key)
+		return m, m.refreshKeysCmd()
+	}
+	m.setStatus("Updated value for " + msg.key)
+	return m, loadValueCmd(m.adapter, info, m.generation)
+}
+
+func (m Model) handleKeyFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	form := m.keyForm
+	if form == nil {
+		return m, nil
+	}
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.keyForm = nil
+		m.setStatus("Key edit cancelled")
+		return m, nil
+	case tea.KeyTab:
+		form.nextFocus()
+		return m, nil
+	case tea.KeyShiftTab:
+		form.prevFocus()
+		return m, nil
+	case tea.KeyEnter:
+		if form.mode == keyFormCreate {
+			key := strings.TrimSpace(form.inputs[keyFieldName].Value())
+			if key == "" {
+				m.setStatus("Key name is required")
+				return m, nil
+			}
+			m.pendingKeyFocus = key
+			m.keyForm = nil
+			_ = m.auditRecord([]string{"SET", key, form.inputs[keyCreateValueField].Value()})
+			return m, createKeyCmd(m.adapter, key, form.inputs[keyCreateValueField].Value(), m.generation)
+		}
+		if strings.TrimSpace(form.key) == "" {
+			m.setStatus("No key selected")
+			m.keyForm = nil
+			return m, nil
+		}
+		value := form.inputs[keyFieldValue].Value()
+		m.keyForm = nil
+		_ = m.auditRecord([]string{"SET", form.key, value})
+		return m, updateKeyValueCmd(m.adapter, form.key, value, form.ttl, m.generation)
+	}
+	updated, cmd := form.inputs[form.focus].Update(msg)
+	form.inputs[form.focus] = updated
+	return m, cmd
+}
+
 func (m Model) handleKeysLoaded(msg keysLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.gen != m.generation {
 		return m, nil
@@ -883,6 +988,21 @@ func (m Model) handleKeysLoaded(msg keysLoadedMsg) (tea.Model, tea.Cmd) {
 	m.keyCursor = msg.cursor
 	m.keyHasMore = msg.cursor != 0
 	m.selectedKey = 0
+	m.keyScroll = 0
+	if m.keyTreeMode {
+		m.keyTreeExpanded = allKeyTreeBranchPaths(m.keys)
+	}
+	if m.pendingKeyFocus != "" {
+		for i, info := range m.keys {
+			if info.Name == m.pendingKeyFocus {
+				m.selectedKey = i
+				m.pendingKeyFocus = ""
+				m.setStatus(fmt.Sprintf("Loaded %d keys; selected %s", len(m.keys), info.Name))
+				m.ensureKeyVisible()
+				return m, loadValueCmd(m.adapter, info, m.generation)
+			}
+		}
+	}
 	m.setStatus(fmt.Sprintf("Loaded %d keys", len(m.keys)))
 	return m, nil
 }
@@ -937,6 +1057,18 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyDown:
 		m.selectNextKey()
 		return m, nil
+	case tea.KeyPgUp:
+		m.scrollKeyList(-m.keyListHeight())
+		return m, nil
+	case tea.KeyPgDown:
+		m.scrollKeyList(m.keyListHeight())
+		return m, nil
+	case tea.KeyLeft:
+		m.collapseSelectedKeyBranch()
+		return m, nil
+	case tea.KeyRight:
+		m.expandSelectedKeyBranch()
+		return m, nil
 	case tea.KeyEnter:
 		if m.selectedKey >= 0 && m.selectedKey < len(m.keys) {
 			return m, loadValueCmd(m.adapter, m.keys[m.selectedKey], m.generation)
@@ -948,6 +1080,40 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch msg.Runes[0] {
+	case 't':
+		m.keyTreeMode = !m.keyTreeMode
+		m.keyScroll = 0
+		if m.keyTreeMode {
+			m.keyTreeExpanded = allKeyTreeBranchPaths(m.keys)
+		}
+		m.setStatus("Key view: " + map[bool]string{true: "tree", false: "flat"}[m.keyTreeMode])
+		return m, nil
+	case 'a':
+		if m.readOnly {
+			m.setStatus("Creating keys is blocked in read-only mode")
+			return m, nil
+		}
+		form := newKeyCreateForm()
+		m.keyForm = &form
+		m.setStatus("New key")
+		return m, nil
+	case 'v':
+		if m.readOnly {
+			m.setStatus("Editing values is blocked in read-only mode")
+			return m, nil
+		}
+		if m.selectedKey < 0 || m.selectedKey >= len(m.keys) {
+			return m, nil
+		}
+		info := m.keys[m.selectedKey]
+		if info.Type != "" && info.Type != "string" {
+			m.setStatus("Value editing supports string keys; found " + info.Type)
+			return m, nil
+		}
+		form := newKeyEditValueForm(info.Name, m.selectedValue.Display(), info.TTL)
+		m.keyForm = &form
+		m.setStatus("Edit value for " + info.Name)
+		return m, nil
 	case 'k':
 		m.selectPreviousKey()
 	case 'j':
@@ -1015,15 +1181,46 @@ func (m Model) keysPageCmd(cursor uint64) tea.Cmd {
 }
 
 func (m *Model) selectPreviousKey() {
-	if m.selectedKey > 0 {
-		m.selectedKey--
+	rows := m.visibleKeyRows()
+	position := m.keyRowPosition(rows)
+	if position <= 0 {
+		return
 	}
+	position--
+	for position >= 0 && rows[position].keyIndex < 0 {
+		position--
+	}
+	if position < 0 {
+		return
+	}
+	m.selectedKey = rows[position].keyIndex
+	m.ensureKeyVisible()
 }
 
 func (m *Model) selectNextKey() {
-	if m.selectedKey < len(m.keys)-1 {
-		m.selectedKey++
+	rows := m.visibleKeyRows()
+	position := m.keyRowPosition(rows)
+	if position < 0 {
+		return
 	}
+	position++
+	for position < len(rows) && rows[position].keyIndex < 0 {
+		position++
+	}
+	if position >= len(rows) {
+		return
+	}
+	m.selectedKey = rows[position].keyIndex
+	m.ensureKeyVisible()
+}
+
+func (m Model) keyRowPosition(rows []keyTreeRow) int {
+	for i, row := range rows {
+		if row.keyIndex == m.selectedKey {
+			return i
+		}
+	}
+	return -1
 }
 
 func (m Model) handleOpsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

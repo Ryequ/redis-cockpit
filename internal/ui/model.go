@@ -78,13 +78,18 @@ type Model struct {
 	lastResult           result.Value
 	pendingCommand       []string
 
-	keys          []adapters.KeyInfo
-	keyCursor     uint64
-	selectedKey   int
-	selectedValue result.Value
-	filterInput   textinput.Model
-	filterMode    bool
-	pendingDelete []string
+	keys            []adapters.KeyInfo
+	keyCursor       uint64
+	selectedKey     int
+	selectedValue   result.Value
+	filterInput     textinput.Model
+	filterMode      bool
+	pendingDelete   []string
+	keyForm         *keyForm
+	pendingKeyFocus string
+	keyTreeMode     bool
+	keyTreeExpanded map[string]bool
+	keyScroll       int
 
 	opsManager     *ops.Manager
 	opsSnapshot    ops.Snapshot
@@ -145,6 +150,7 @@ func NewModelWithConfig(cfg config.Config, readOnly bool) Model {
 		selectedProfile: selected,
 		profileSearch:   profileSearch,
 		profileHealth:   make(map[string]ProfileHealth),
+		keyTreeExpanded: make(map[string]bool),
 		history:         command.NewHistory(100),
 		commandInput:    input,
 		filterInput:     filter,
