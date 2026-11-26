@@ -55,6 +55,7 @@ var (
 	warnStyle         lipgloss.Style
 	buttonStyle       lipgloss.Style
 	activeButtonStyle lipgloss.Style
+	hintStyle         lipgloss.Style
 )
 
 func themePaletteFor(name string) themePalette {
@@ -107,6 +108,7 @@ func applyTheme(name string) {
 	warnStyle = lipgloss.NewStyle().Foreground(amber)
 	buttonStyle = lipgloss.NewStyle().Bold(true).Foreground(p.buttonFG).Background(p.buttonBG).Padding(0, 1)
 	activeButtonStyle = lipgloss.NewStyle().Bold(true).Foreground(p.buttonBG).Background(violet).Padding(0, 1)
+	hintStyle = lipgloss.NewStyle().Bold(true).Foreground(p.buttonFG).Background(p.buttonBG).Padding(0, 1)
 }
 
 func padToDisplayWidth(value string, width int) string {

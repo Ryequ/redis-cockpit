@@ -85,20 +85,15 @@ func (m Model) renderNav() string {
 		Render(b.String())
 }
 
-func renderTitleWithHint(title, hint string, width int) []string {
-	titleWidth := runewidth.StringWidth(stripANSI(title))
-	hintWidth := runewidth.StringWidth(stripANSI(hint))
-	if titleWidth+1+hintWidth <= width {
-		gap := strings.Repeat(" ", maxInt(width-titleWidth-hintWidth, 1))
-		return []string{title + gap + hint}
-	}
+func sectionSeparator(width int) string {
+	return lipgloss.NewStyle().Foreground(blue).Render(strings.Repeat("─", maxInt(width, 20)))
+}
 
-	hint = truncateToViewport(hint, 1, width)
-	hintWidth = runewidth.StringWidth(stripANSI(hint))
-	return []string{
-		title,
-		strings.Repeat(" ", maxInt(width-hintWidth, 0)) + hint,
-	}
+func renderBottomHintLine(hint string, width int) string {
+	hint = truncateToViewport(stripANSI(hint), 1, maxInt(width-2, 1))
+	hint = hintStyle.Render(hint)
+	hintWidth := runewidth.StringWidth(stripANSI(hint))
+	return strings.Repeat(" ", maxInt(width-hintWidth, 0)) + hint
 }
 
 func (m Model) renderWorkspace(width, height int) string {
@@ -131,14 +126,12 @@ func (m Model) renderWorkspace(width, height int) string {
 	clampedHeight := maxInt(height, 2)
 	clampedWidth := maxInt(width, 20)
 	contentWidth := maxInt(clampedWidth-4, 10)
-	bodyLines := strings.Split(body, "\n")
-	if len(bodyLines) > 0 {
-		hint := subtitleStyle.Render(m.workspaceHintLine())
-		titleLines := renderTitleWithHint(bodyLines[0], hint, contentWidth)
-		bodyLines = append(titleLines, bodyLines[1:]...)
-		body = strings.Join(bodyLines, "\n")
+	bodyLines := strings.Split(truncateToViewport(body, maxInt(clampedHeight-1, 1), contentWidth), "\n")
+	for len(bodyLines) < maxInt(clampedHeight-1, 1) {
+		bodyLines = append(bodyLines, "")
 	}
-	body = truncateToViewport(body, clampedHeight, contentWidth)
+	hint := renderBottomHintLine(m.workspaceHintLine(), contentWidth)
+	body = strings.Join(append(bodyLines, hint), "\n")
 	return panelStyle.
 		Width(clampedWidth).
 		Height(clampedHeight).
@@ -270,7 +263,8 @@ func (m Model) renderKeysBody() string {
 		lines = append(lines, m.renderKeyRows())
 	}
 
-	lines = append(lines, "", "Value:  "+m.button("[Copy value]"))
+	separatorWidth := maxInt(m.width-navWidth-8, 20)
+	lines = append(lines, "", sectionSeparator(separatorWidth), "", "Value:  "+m.button("[Copy value]"))
 	if m.pendingDelete != nil {
 		lines = append(lines, m.renderConfirmBox(
 			"Confirm delete",
@@ -470,17 +464,17 @@ func (m Model) workspaceHint() string {
 func (m Model) workspaceHintLine() string {
 	switch m.activeView {
 	case ViewConnections:
-		return m.txt("↑↓/j/k 选择  •  Enter 连接  •  n 新增  •  e 编辑  •  d 删除  •  t 测试  •  鼠标点击列表项选择")
+		return m.txt("↑↓ 选  ↵ 连  n 增  e 改  d 删  t 测")
 	case ViewKeys:
-		return m.txt("↑↓/j/k 选择并自动读取 Value  •  a 新增 Key  •  v 修改 Value  •  t 树/平铺  •  ←/→ 折叠/展开  •  滚轮/PgUp/PgDn 滚动  •  / 筛选  •  r 刷新")
+		return m.txt("↑↓ 选/读  a 增  v 改  d 删  t 树  / 筛  r 刷")
 	case ViewWorkbench:
-		return m.txt("Enter 执行  •  ↑↓ 历史  •  ? 设置")
+		return m.txt("↵ 执行  ↑↓ 历史  ? 设置")
 	case ViewOps:
-		return m.txt("r 刷新快照  •  脚本与事务可在 Workbench 中执行")
+		return m.txt("r 刷新")
 	case ViewStreams:
-		return m.txt("s 订阅  •  p 发布测试消息  •  m 启动 MONITOR  •  x 停止  •  输入频道名")
+		return m.txt("s 订阅  p 发布  m 监控  x 停止")
 	case ViewSettings:
-		return m.txt("点击按钮切换语言或主题  •  Tab/1-6 返回其他页面")
+		return m.txt("点击切换  ? 帮助")
 	default:
 		return ""
 	}

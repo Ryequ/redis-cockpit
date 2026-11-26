@@ -9,8 +9,7 @@
 
 `redis-cockpit` 是一个终端内运行的 Redis TUI 工具，提供连接管理、Key 浏览、命令执行、运维监控、Pub/Sub、MONITOR、脚本与事务等功能。工具以键盘操作为主，并支持在兼容终端中使用鼠标。
 
-- 仓库：<https://github.com/Ryequ/redis-cockpit>
-- 当前发布版本：`v0.1.0`
+当前发布版本：`v0.2.0`
 
 ## 功能特性
 
@@ -62,7 +61,7 @@ redis-cockpit
 如果需要安装指定版本：
 
 ```bash
-go install github.com/Ryequ/redis-cockpit@v0.1.0
+go install github.com/Ryequ/redis-cockpit@v0.2.0
 ```
 
 #### 方式二：从 GitHub Releases 下载预编译二进制
@@ -184,7 +183,7 @@ password: ${REDIS_TUI_PASSWORD}
 
 占位符只在建立连接时展开；通过 TUI 保存配置会保留占位符，不会把明文密码写回配置文件。
 
-### 连接档案
+### 连接模板
 
 配置中的 `profiles` 示例：
 

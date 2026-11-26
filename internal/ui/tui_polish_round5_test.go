@@ -77,7 +77,7 @@ func TestJSONValueIsFormattedForDisplay(t *testing.T) {
 	}
 }
 
-func TestWorkspaceHintLineStaysOnTitleRow(t *testing.T) {
+func TestWorkspaceHintLineStaysNearBottom(t *testing.T) {
 	m := manyProfilesModel(40)
 	m.height = 24
 	m.setView(ViewConnections)
@@ -85,15 +85,15 @@ func TestWorkspaceHintLineStaysOnTitleRow(t *testing.T) {
 	if len(lines) < 4 {
 		t.Fatalf("view too short: %#v", lines)
 	}
-	found := false
-	for i := 3; i <= 4 && i < len(lines); i++ {
-		if strings.Contains(stripANSI(lines[i]), "↑↓/j/k") {
-			found = true
+	hintIndex := -1
+	for i, line := range lines {
+		if strings.Contains(stripANSI(line), "↑↓") {
+			hintIndex = i
 			break
 		}
 	}
-	if !found {
-		t.Fatalf("hint is not on title row or immediately below:\n%s", strings.Join(lines[3:minInt(len(lines), 6)], "\n"))
+	if hintIndex < len(lines)-5 {
+		t.Fatalf("hint is not near bottom: index=%d lines=%d", hintIndex, len(lines))
 	}
 }
 

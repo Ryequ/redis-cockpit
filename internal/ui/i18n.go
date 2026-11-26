@@ -300,6 +300,12 @@ var formEn = map[string]string{
 	"Enter 执行  •  ↑↓ 历史  •  ? 设置":                             "Enter execute  •  ↑↓ history  •  ? settings",
 	"点击按钮切换语言或主题  •  Tab/1-6 返回其他页面":                          "Click buttons to switch language or theme  •  Tab/1-6 switch view",
 	"鼠标点击  •  Tab/1-6 切换  •  Enter 确认  •  ? 设置  •  Ctrl+C 退出": "Mouse click  •  Tab/1-6 switch  •  Enter confirm  •  ? settings  •  Ctrl+C quit",
+	"↑↓ 选  ↵ 连  n 增  e 编  d 删  t 测":                           "↑↓ sel  ↵ conn  n new  e edit  d del  t test",
+	"↑↓ 选/读  a 增  v 改  d 删  t 树  / 筛  r 刷":                    "↑↓ pick  a add  v edit  d del  t tree  / find  r fresh",
+	"↵ 执行  ↑↓ 历史  ? 设置":                                       "↵ exec  ↑↓ history  ? settings",
+	"r 刷新":                                                    "r refresh",
+	"s 订阅  p 发布  m 监控  x 停止":                                  "s sub  p pub  m monitor  x stop",
+	"点击切换  ? 帮助":                                              "click to switch  ? help",
 }
 
 func buttonRowForLanguage(language string, labels ...string) string {
