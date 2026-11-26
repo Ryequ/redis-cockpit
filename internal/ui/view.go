@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/Ryequ/redis-cockpit/internal/redis"
 	"github.com/Ryequ/redis-cockpit/internal/result"
@@ -14,24 +15,23 @@ import (
 )
 
 const (
-	navWidth   = 20
-	headerRows = 2
-	footerRows = 2
+	navWidth              = 20
+	headerRows            = 1
+	footerRows            = 1
+	panelVerticalOverhead = 4
 )
 
 func (m Model) View() string {
 	width := maxInt(m.width, 80)
-	height := maxInt(m.height, 24)
+	if m.height < 8 {
+		return lipgloss.NewStyle().Width(width).Render("Terminal too small")
+	}
+	height := m.height
 
-	header := lipgloss.JoinHorizontal(
-		lipgloss.Left,
-		titleStyle.Render(" Redis TUI "),
-		"  ",
-		subtitleStyle.Render("Redis command workbench"),
-	)
+	header := m.renderHeader(width)
 
 	left := m.renderNav()
-	center := m.renderWorkspace(width-navWidth-4, height-headerRows-footerRows)
+	center := m.renderWorkspace(width-navWidth-4, height-headerRows-footerRows-panelVerticalOverhead)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, center)
 	footer := m.renderFooter(width)
 
@@ -40,6 +40,28 @@ func (m Model) View() string {
 		return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, m.renderHelpModal())
 	}
 	return screen
+}
+
+func (m Model) renderHeader(width int) string {
+	tabs := make([]string, 0, len(navItems))
+	for i, view := range navItems {
+		label := fmt.Sprintf("[%d %s]", i+1, view.String())
+		if view == m.activeView {
+			label = navActiveStyle.Render(label)
+		} else {
+			label = subtitleStyle.Render(label)
+		}
+		tabs = append(tabs, label)
+	}
+	joined := lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		titleStyle.Render(" Redis Cockpit "),
+		"  ",
+		strings.Join(tabs, " "),
+		"  ",
+		subtitleStyle.Render("[Help]"),
+	)
+	return runewidth.Truncate(stripANSI(joined), maxInt(width-2, 1), "…")
 }
 
 func (m Model) renderNav() string {
@@ -55,7 +77,7 @@ func (m Model) renderNav() string {
 	}
 	return lipgloss.NewStyle().
 		Width(navWidth).
-		Height(maxInt(m.height-footerRows-headerRows, 10)).
+		Height(maxInt(m.height-footerRows-headerRows, 1)).
 		Render(b.String())
 }
 
@@ -84,10 +106,30 @@ func (m Model) renderWorkspace(width, height int) string {
 		)
 	}
 
+	clampedHeight := maxInt(height, 1)
+	clampedWidth := maxInt(width, 20)
+	body = truncateToViewport(body, clampedHeight, clampedWidth)
 	return panelStyle.
-		Width(maxInt(width, 40)).
-		Height(maxInt(height, 10)).
+		Width(clampedWidth).
+		Height(clampedHeight).
 		Render(body)
+}
+
+func truncateToViewport(body string, maxLines, maxWidth int) string {
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		plain := stripANSI(line)
+		if runewidth.StringWidth(plain) > maxWidth {
+			lines[i] = runewidth.Truncate(plain, maxWidth, "…")
+		}
+	}
+	if len(lines) <= maxLines {
+		return strings.Join(lines, "\n")
+	}
+	lines = lines[:maxLines]
+	marker := "  ... truncated"
+	lines[len(lines)-1] = runewidth.Truncate(lines[len(lines)-1]+marker, maxWidth, "…")
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) renderConnectionsBody() string {
@@ -100,7 +142,18 @@ func (m Model) renderConnectionsBody() string {
 		"",
 		subtitleStyle.Render(m.workspaceHint()),
 		"",
+		subtitleStyle.Render("[Connect] [N new] [E edit] [D delete] [T test]"),
+		"",
 		"Profiles:",
+	}
+
+	if m.pendingProfileDelete != "" {
+		lines = append(lines, renderConfirmBox(
+			"Delete connection profile",
+			m.pendingProfileDelete,
+			"[Y] Delete",
+			"[N] Cancel",
+		), "")
 	}
 
 	if len(m.cfg.Profiles) == 0 {
@@ -147,7 +200,7 @@ func (m Model) renderWorkbenchBody() string {
 		subtitleStyle.Render(m.workspaceHint()),
 		"",
 		"Command:",
-		m.commandInput.View(),
+		m.commandInput.View() + "  " + subtitleStyle.Render("[Input]") + "  " + okStyle.Render("[Execute]"),
 		"",
 		"History:",
 	}
@@ -163,7 +216,10 @@ func (m Model) renderWorkbenchBody() string {
 	lines = append(lines, "", "Result:")
 	if m.pendingCommand != nil {
 		redacted := strings.Join(security.RedactCommand(m.pendingCommand), " ")
-		lines = append(lines, dangerStyle.Render("  Confirm critical command: "+redacted), warnStyle.Render("  y = execute, n/Esc = cancel"))
+		lines = append(lines,
+			dangerStyle.Render("  Confirm critical command: "+redacted),
+			warnStyle.Render("  [Y] Execute   [N] Cancel"),
+		)
 	} else {
 		lines = append(lines, result.Render(m.lastResult, result.FormatRaw))
 	}
@@ -177,6 +233,8 @@ func (m Model) renderKeysBody() string {
 		subtitleStyle.Render(m.workspaceHint()),
 		"",
 		"Filter: " + m.filterInput.View(),
+		"",
+		subtitleStyle.Render("[Refresh] [Next] [Del]"),
 		"",
 		"Keys:",
 	}
@@ -194,10 +252,12 @@ func (m Model) renderKeysBody() string {
 
 	lines = append(lines, "", "Value:")
 	if m.pendingDelete != nil {
-		lines = append(lines,
-			dangerStyle.Render("  Confirm delete: "+strings.Join(m.pendingDelete, ", ")),
-			warnStyle.Render("  y = delete, n/Esc = cancel"),
-		)
+		lines = append(lines, renderConfirmBox(
+			"Confirm delete",
+			strings.Join(m.pendingDelete, ", "),
+			"[Y] Delete",
+			"[N] Cancel",
+		))
 	} else {
 		lines = append(lines, result.Render(m.selectedValue, result.FormatRaw))
 	}
@@ -215,6 +275,8 @@ func (m Model) renderOpsBody() string {
 		lipgloss.NewStyle().Bold(true).Foreground(accent).Render("Ops"),
 		"",
 		subtitleStyle.Render(m.workspaceHint()),
+		"",
+		subtitleStyle.Render("[Refresh]"),
 		"",
 		"INFO:",
 	}
@@ -289,7 +351,9 @@ func (m Model) renderStreamsBody() string {
 		"",
 		subtitleStyle.Render(m.workspaceHint()),
 		"",
-		"Channel: " + m.streamInput.View(),
+		"Channel: " + m.streamInput.View() + "  " + subtitleStyle.Render("[Channel]"),
+		"",
+		subtitleStyle.Render("[Sub] [Pub] [Monitor] [Stop]"),
 		"",
 		"Pub/Sub:",
 	}
@@ -396,12 +460,15 @@ func (m Model) renderFooter(width int) string {
 		mouseHint = "  •  Mouse Click 选择"
 	}
 	text := "Tab/1-5 切换页面  •  ↑↓/hjkl 导航  •  Enter 确认  •  ? 帮助" + mouseHint + "  •  Ctrl+C 退出"
-	return footerStyle.Width(maxInt(width, 80)).Render(statusPrefix(m.status) + text)
+	footerWidth := maxInt(width, 80)
+	footerText := stripANSI(statusPrefix(m.status) + text)
+	footerText = runewidth.Truncate(footerText, maxInt(footerWidth-2, 1), "…")
+	return footerStyle.Width(footerWidth).Render(footerText)
 }
 
 func (m Model) renderHelpModal() string {
 	lines := []string{
-		"Redis TUI 快捷键",
+		"Redis Cockpit 快捷键",
 		"",
 		"1-5 / Tab / Shift+Tab   切换页面",
 		"↑↓ / j k                移动选择",
@@ -410,7 +477,9 @@ func (m Model) renderHelpModal() string {
 		"?                       显示帮助",
 		"Ctrl+C / Ctrl+Q         退出",
 		"",
-		"鼠标：点击左侧导航或列表项；滚轮滚动长结果。",
+		"鼠标：点击顶部标签、左侧导航、按钮和列表项；滚轮滚动长结果。",
+		"",
+		"[Close]",
 	}
 	modal := lipgloss.NewStyle().
 		Border(lipgloss.DoubleBorder()).
@@ -420,6 +489,19 @@ func (m Model) renderHelpModal() string {
 		Padding(1, 2).
 		Render(strings.Join(lines, "\n"))
 	return dangerStyle.Render(modal)
+}
+
+func renderConfirmBox(title, detail, yes, no string) string {
+	body := strings.Join([]string{
+		dangerStyle.Render(title),
+		detail,
+		warnStyle.Render(yes + "   " + no),
+	}, "\n")
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(red).
+		Padding(0, 1).
+		Render(body)
 }
 
 func statusPrefix(status string) string {

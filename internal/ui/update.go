@@ -384,32 +384,166 @@ func (m Model) handleConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft || m.showHelpModal {
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return m, nil
+	}
+	view := m.View()
+
+	if m.showHelpModal {
+		if clickToken(msg, view, "[Close]") {
+			m.showHelpModal = false
+		}
 		return m, nil
 	}
 
+	if m.pendingProfileDelete != "" {
+		switch {
+		case clickToken(msg, view, "[Y] Delete"):
+			return m.handleProfileDeleteConfirmation(keyFromRune('y'))
+		case clickToken(msg, view, "[N] Cancel"):
+			return m.handleProfileDeleteConfirmation(keyFromRune('n'))
+		}
+		return m, nil
+	}
+
+	if m.pendingDelete != nil {
+		switch {
+		case clickToken(msg, view, "[Y] Delete"):
+			return m.handleDeleteConfirmation(keyFromRune('y'))
+		case clickToken(msg, view, "[N] Cancel"):
+			return m.handleDeleteConfirmation(keyFromRune('n'))
+		}
+		return m, nil
+	}
+
+	if m.pendingCommand != nil {
+		switch {
+		case clickToken(msg, view, "[Y] Execute"):
+			return m.handleConfirmation(keyFromRune('y'))
+		case clickToken(msg, view, "[N] Cancel"):
+			return m.handleConfirmation(keyFromRune('n'))
+		}
+		return m, nil
+	}
+
+	if m.profileForm != nil {
+		if clickToken(msg, view, "[Save]") {
+			return m.handleProfileFormKey(tea.KeyMsg{Type: tea.KeyEnter})
+		}
+		if clickToken(msg, view, "[Cancel]") {
+			return m.handleProfileFormKey(tea.KeyMsg{Type: tea.KeyEsc})
+		}
+		for i, label := range m.profileForm.labels {
+			if clickToken(msg, view, label+":") {
+				m.profileForm.setFocus(i)
+				return m, nil
+			}
+		}
+		for i, label := range m.profileForm.boolLabels {
+			if clickToken(msg, view, label+":") {
+				m.profileForm.setFocus(profileFieldCount + i)
+				m.profileForm.toggleBool()
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+
+	for i, item := range navItems {
+		if clickToken(msg, view, fmt.Sprintf("[%d %s]", i+1, item.String())) {
+			m.setView(item)
+			return m, nil
+		}
+	}
+
 	navStartY := 1
-	if msg.Y >= navStartY && msg.Y < navStartY+len(navItems) {
+	if msg.X >= 0 && msg.X < navWidth && msg.Y >= navStartY && msg.Y < navStartY+len(navItems) {
 		m.setView(navItems[msg.Y-navStartY])
 		return m, nil
 	}
 
-	if m.activeView == ViewConnections && len(m.cfg.Profiles) > 0 {
-		profileStartY := 5
-		if msg.Y >= profileStartY && msg.Y < profileStartY+len(m.cfg.Profiles) {
-			m.selectedProfile = msg.Y - profileStartY
-			m.setStatus("Selected " + m.cfg.Profiles[m.selectedProfile].Name)
-		}
+	if clickToken(msg, view, "[Help]") {
+		m.showHelpModal = true
+		return m, nil
 	}
 
-	if m.activeView == ViewKeys && len(m.keys) > 0 {
-		keyListStartY := 5
-		if msg.Y >= keyListStartY && msg.Y < keyListStartY+len(m.keys) {
-			m.selectedKey = msg.Y - keyListStartY
-			m.setStatus("Selected " + m.keys[m.selectedKey].Name)
+	switch m.activeView {
+	case ViewConnections:
+		for i, profile := range m.cfg.Profiles {
+			if clickLineContaining(msg, view, fmt.Sprintf("%d. %s", i+1, profile.Name)) {
+				m.selectedProfile = i
+				m.setStatus("Selected " + profile.Name)
+				return m, nil
+			}
+		}
+		switch {
+		case clickToken(msg, view, "[Connect]"):
+			return m.handleConnectionsKey(tea.KeyMsg{Type: tea.KeyEnter})
+		case clickToken(msg, view, "[N new]"):
+			return m.handleConnectionsKey(keyFromRune('n'))
+		case clickToken(msg, view, "[E edit]"):
+			return m.handleConnectionsKey(keyFromRune('e'))
+		case clickToken(msg, view, "[D delete]"):
+			return m.handleConnectionsKey(keyFromRune('d'))
+		case clickToken(msg, view, "[T test]"):
+			return m.handleConnectionsKey(keyFromRune('t'))
+		}
+	case ViewKeys:
+		switch {
+		case clickToken(msg, view, "[Refresh]"):
+			return m.handleKeysViewKey(keyFromRune('r'))
+		case clickToken(msg, view, "[Next]"):
+			return m.handleKeysViewKey(keyFromRune('n'))
+		case clickToken(msg, view, "[Del]"):
+			return m.handleKeysViewKey(keyFromRune('d'))
+		}
+		for i, key := range m.keys {
+			if clickLineContaining(msg, view, key.Name+"  [") {
+				m.selectedKey = i
+				m.setStatus("Selected " + key.Name)
+				if m.adapter != nil {
+					return m, loadValueCmd(m.adapter, key, m.generation)
+				}
+				return m, nil
+			}
+		}
+	case ViewWorkbench:
+		if clickToken(msg, view, "[Input]") {
+			return m, m.commandInput.Focus()
+		}
+		if clickToken(msg, view, "[Execute]") {
+			return m.handleWorkbenchKey(tea.KeyMsg{Type: tea.KeyEnter})
+		}
+		for _, entry := range m.history.All() {
+			if clickLineContaining(msg, view, "  "+entry) {
+				m.commandInput.SetValue(entry)
+				return m, m.commandInput.Focus()
+			}
+		}
+	case ViewOps:
+		if clickToken(msg, view, "[Refresh]") {
+			return m.handleOpsKey(keyFromRune('r'))
+		}
+	case ViewStreams:
+		if clickToken(msg, view, "[Channel]") {
+			return m, m.streamInput.Focus()
+		}
+		switch {
+		case clickToken(msg, view, "[Sub]"):
+			return m.handleStreamsKey(keyFromRune('s'))
+		case clickToken(msg, view, "[Pub]"):
+			return m.handleStreamsKey(keyFromRune('p'))
+		case clickToken(msg, view, "[Monitor]"):
+			return m.handleStreamsKey(keyFromRune('m'))
+		case clickToken(msg, view, "[Stop]"):
+			return m.handleStreamsKey(keyFromRune('x'))
 		}
 	}
 	return m, nil
+}
+
+func keyFromRune(r rune) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
 }
 
 func (m Model) executeLine(line string) (tea.Model, tea.Cmd) {

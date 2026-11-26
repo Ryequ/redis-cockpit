@@ -216,7 +216,7 @@ func (f profileForm) View() string {
 		}
 		lines = append(lines, fmt.Sprintf("%s%-20s %s", marker, label+":", value))
 	}
-	lines = append(lines, "", "Tab/Shift+Tab 切换字段  •  Space 切换开关  •  Enter 保存  •  Esc 取消")
+	lines = append(lines, "", "[Save]  [Cancel]", "Tab/Shift+Tab 切换字段  •  Space 切换开关  •  Enter 保存  •  Esc 取消")
 	return strings.Join(lines, "\n")
 }
 

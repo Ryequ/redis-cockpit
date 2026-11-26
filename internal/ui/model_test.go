@@ -11,7 +11,7 @@ func TestNewModelRendersWorkbenchChrome(t *testing.T) {
 	m := NewModel()
 	view := m.View()
 
-	for _, want := range []string{"Redis TUI", "Connections", "Keys", "Workbench", "Ops", "Streams", "Tab", "Mouse"} {
+	for _, want := range []string{"Redis Cockpit", "Connections", "Keys", "Workbench", "Ops", "Streams", "Tab", "Mouse"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}
