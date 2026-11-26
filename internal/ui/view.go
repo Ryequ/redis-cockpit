@@ -248,6 +248,9 @@ func (m Model) renderWorkbenchBody() string {
 }
 
 func (m Model) renderKeysBody() string {
+	if m.keyForm != nil {
+		return m.keyForm.View()
+	}
 	lines := []string{
 		lipgloss.NewStyle().Bold(true).Foreground(accent).Render("Keys"),
 		"",
@@ -255,7 +258,7 @@ func (m Model) renderKeysBody() string {
 		"",
 		"Filter: " + m.filterInput.View(),
 		"",
-		subtitleStyle.Render("[Refresh] [Next] [Del]"),
+		subtitleStyle.Render("[Refresh] [Next] [New key] [Edit value] [Del]"),
 		"",
 		"Keys:",
 	}
@@ -287,7 +290,7 @@ func (m Model) renderKeysBody() string {
 	if m.keyHasMore {
 		nextPageHint = "  •  n 下一页"
 	}
-	lines = append(lines, "", "↑↓/j/k 选择  •  Enter 查看值  •  / 筛选  •  r 刷新"+nextPageHint+"  •  d 删除")
+	lines = append(lines, "", "↑↓/j/k 选择  •  Enter 查看值  •  a 新增 Key  •  v 修改 Value  •  / 筛选  •  r 刷新"+nextPageHint+"  •  d 删除")
 	return strings.Join(lines, "\n")
 }
 

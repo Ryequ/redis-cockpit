@@ -35,6 +35,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleValueLoaded(msg)
 	case keysDeletedMsg:
 		return m.handleKeysDeleted(msg)
+	case keyWrittenMsg:
+		return m.handleKeyWritten(msg)
 	case opsLoadedMsg:
 		return m.handleOpsLoaded(msg)
 	case subscribedMsg:
@@ -100,6 +102,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	if m.profileForm != nil {
 		return m.handleProfileFormKey(msg)
+	}
+
+	if m.keyForm != nil {
+		return m.handleKeyFormKey(msg)
 	}
 
 	if isCycleForward(msg) {
@@ -598,6 +604,22 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.keyForm != nil {
+		if clickToken(msg, view, "[OK]") {
+			return m.handleKeyFormKey(tea.KeyMsg{Type: tea.KeyEnter})
+		}
+		if clickToken(msg, view, "[Cancel]") {
+			return m.handleKeyFormKey(tea.KeyMsg{Type: tea.KeyEsc})
+		}
+		for i, label := range m.keyForm.labels {
+			if clickLineContaining(msg, view, label+":") {
+				m.keyForm.focus = i
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+
 	if m.profileIOForm != nil {
 		if clickToken(msg, view, "[OK]") {
 			return m.handleProfileIOFormKey(tea.KeyMsg{Type: tea.KeyEnter})
@@ -704,6 +726,10 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m.handleKeysViewKey(keyFromRune('r'))
 		case clickToken(msg, view, "[Next]"):
 			return m.handleKeysViewKey(keyFromRune('n'))
+		case clickToken(msg, view, "[New key]"):
+			return m.handleKeysViewKey(keyFromRune('a'))
+		case clickToken(msg, view, "[Edit value]"):
+			return m.handleKeysViewKey(keyFromRune('v'))
 		case clickToken(msg, view, "[Del]"):
 			return m.handleKeysViewKey(keyFromRune('d'))
 		}
@@ -871,6 +897,66 @@ func (m *Model) closeClient() {
 	m.monitorEvents = nil
 }
 
+func (m Model) handleKeyWritten(msg keyWrittenMsg) (tea.Model, tea.Cmd) {
+	if msg.gen != m.generation {
+		return m, nil
+	}
+	if msg.err != nil {
+		m.setStatus("Key write failed: " + msg.err.Error())
+		return m, nil
+	}
+	info := adapters.KeyInfo{Name: msg.key, Type: "string"}
+	if m.pendingKeyFocus != "" {
+		m.setStatus("Created key: " + msg.key)
+		return m, m.refreshKeysCmd()
+	}
+	m.setStatus("Updated value for " + msg.key)
+	return m, loadValueCmd(m.adapter, info, m.generation)
+}
+
+func (m Model) handleKeyFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	form := m.keyForm
+	if form == nil {
+		return m, nil
+	}
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.keyForm = nil
+		m.setStatus("Key edit cancelled")
+		return m, nil
+	case tea.KeyTab:
+		form.nextFocus()
+		return m, nil
+	case tea.KeyShiftTab:
+		form.prevFocus()
+		return m, nil
+	case tea.KeyEnter:
+		if form.mode == keyFormCreate {
+			key := strings.TrimSpace(form.inputs[keyFieldName].Value())
+			if key == "" {
+				m.setStatus("Key name is required")
+				return m, nil
+			}
+			m.pendingKeyFocus = key
+			m.keyForm = nil
+			_ = m.auditRecord([]string{"SET", key, form.inputs[keyCreateValueField].Value()})
+			return m, createKeyCmd(m.adapter, key, form.inputs[keyCreateValueField].Value(), m.generation)
+		}
+		if strings.TrimSpace(form.key) == "" {
+			m.setStatus("No key selected")
+			m.keyForm = nil
+			return m, nil
+		}
+		value := form.inputs[keyFieldValue].Value()
+		m.keyForm = nil
+		_ = m.auditRecord([]string{"SET", form.key, value})
+		return m, updateKeyValueCmd(m.adapter, form.key, value, form.ttl, m.generation)
+	}
+	updated, cmd := form.inputs[form.focus].Update(msg)
+	form.inputs[form.focus] = updated
+	return m, cmd
+}
+
 func (m Model) handleKeysLoaded(msg keysLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.gen != m.generation {
 		return m, nil
@@ -883,6 +969,16 @@ func (m Model) handleKeysLoaded(msg keysLoadedMsg) (tea.Model, tea.Cmd) {
 	m.keyCursor = msg.cursor
 	m.keyHasMore = msg.cursor != 0
 	m.selectedKey = 0
+	if m.pendingKeyFocus != "" {
+		for i, info := range m.keys {
+			if info.Name == m.pendingKeyFocus {
+				m.selectedKey = i
+				m.pendingKeyFocus = ""
+				m.setStatus(fmt.Sprintf("Loaded %d keys; selected %s", len(m.keys), info.Name))
+				return m, loadValueCmd(m.adapter, info, m.generation)
+			}
+		}
+	}
 	m.setStatus(fmt.Sprintf("Loaded %d keys", len(m.keys)))
 	return m, nil
 }
@@ -948,6 +1044,32 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch msg.Runes[0] {
+	case 'a':
+		if m.readOnly {
+			m.setStatus("Creating keys is blocked in read-only mode")
+			return m, nil
+		}
+		form := newKeyCreateForm()
+		m.keyForm = &form
+		m.setStatus("New key")
+		return m, nil
+	case 'v':
+		if m.readOnly {
+			m.setStatus("Editing values is blocked in read-only mode")
+			return m, nil
+		}
+		if m.selectedKey < 0 || m.selectedKey >= len(m.keys) {
+			return m, nil
+		}
+		info := m.keys[m.selectedKey]
+		if info.Type != "" && info.Type != "string" {
+			m.setStatus("Value editing supports string keys; found " + info.Type)
+			return m, nil
+		}
+		form := newKeyEditValueForm(info.Name, m.selectedValue.Display(), info.TTL)
+		m.keyForm = &form
+		m.setStatus("Edit value for " + info.Name)
+		return m, nil
 	case 'k':
 		m.selectPreviousKey()
 	case 'j':

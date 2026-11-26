@@ -131,6 +131,8 @@ SSH 隧道通过本机 `ssh` 命令建立本地端口转发，当前支持 SSH a
 | `/` | 在 Keys 视图编辑筛选条件 |
 | `r` | 刷新 Keys 或 Ops 快照 |
 | `n` | 加载下一页 Key |
+| `a` | 新增 Key；可输入 Key 名称和可选初始值，创建后自动选中新 Key |
+| `v` | 修改所选 String Key 的 Value |
 | `d` | 删除选中的 Key（需确认） |
 | `s` / `p` / `m` / `x` | 在 Streams 视图订阅、发布、启动 MONITOR、停止 |
 

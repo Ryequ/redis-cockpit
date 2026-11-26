@@ -175,6 +175,39 @@ func deleteKeysCmd(manager *adapters.Manager, keys []string, gen uint64) tea.Cmd
 	}
 }
 
+type keyWrittenMsg struct {
+	gen uint64
+	key string
+	err error
+}
+
+func createKeyCmd(manager *adapters.Manager, key, value string, gen uint64) tea.Cmd {
+	return func() tea.Msg {
+		if manager == nil {
+			return keyWrittenMsg{gen: gen, err: errors.New("not connected to Redis")}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err := manager.SetString(ctx, key, value, 0)
+		return keyWrittenMsg{gen: gen, key: key, err: err}
+	}
+}
+
+func updateKeyValueCmd(manager *adapters.Manager, key, value string, ttl time.Duration, gen uint64) tea.Cmd {
+	return func() tea.Msg {
+		if manager == nil {
+			return keyWrittenMsg{gen: gen, key: key, err: errors.New("not connected to Redis")}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if ttl < 0 {
+			ttl = 0
+		}
+		err := manager.SetString(ctx, key, value, ttl)
+		return keyWrittenMsg{gen: gen, key: key, err: err}
+	}
+}
+
 func loadTypedValue(ctx context.Context, manager *adapters.Manager, info adapters.KeyInfo) (result.Value, error) {
 	switch info.Type {
 	case "string":

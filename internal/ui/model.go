@@ -78,13 +78,15 @@ type Model struct {
 	lastResult           result.Value
 	pendingCommand       []string
 
-	keys          []adapters.KeyInfo
-	keyCursor     uint64
-	selectedKey   int
-	selectedValue result.Value
-	filterInput   textinput.Model
-	filterMode    bool
-	pendingDelete []string
+	keys            []adapters.KeyInfo
+	keyCursor       uint64
+	selectedKey     int
+	selectedValue   result.Value
+	filterInput     textinput.Model
+	filterMode      bool
+	pendingDelete   []string
+	keyForm         *keyForm
+	pendingKeyFocus string
 
 	opsManager     *ops.Manager
 	opsSnapshot    ops.Snapshot
