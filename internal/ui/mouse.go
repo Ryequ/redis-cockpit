@@ -41,6 +41,10 @@ func clickToken(msg tea.MouseMsg, view, token string) bool {
 	return msg.X >= x && msg.X < x+width
 }
 
+func (m Model) clickAction(msg tea.MouseMsg, view, canonical string) bool {
+	return clickToken(msg, view, m.btnLabel(canonical)) || clickToken(msg, view, canonical)
+}
+
 func clickLineContaining(msg tea.MouseMsg, view, needle string) bool {
 	x, y, width, ok := locateLineContaining(view, needle)
 	if !ok || msg.Y != y {

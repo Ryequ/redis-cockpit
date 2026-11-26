@@ -37,6 +37,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKeysDeleted(msg)
 	case keyWrittenMsg:
 		return m.handleKeyWritten(msg)
+	case valueCopiedMsg:
+		if msg.gen != m.generation {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.setStatus("Copy failed: " + msg.err.Error())
+			return m, nil
+		}
+		m.setStatus(m.txt("Copied value"))
+		return m, nil
 	case opsLoadedMsg:
 		return m.handleOpsLoaded(msg)
 	case subscribedMsg:
@@ -88,6 +98,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleDeleteConfirmation(msg)
 	}
 
+	if m.pendingEditConfirm != "" {
+		return m.handleEditConfirmation(msg)
+	}
+
 	if m.pendingCommand != nil {
 		return m.handleConfirmation(msg)
 	}
@@ -127,7 +141,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.Runes[0] == '?' {
-			m.showHelpModal = true
+			m.setView(ViewSettings)
 			return m, nil
 		}
 	}
@@ -579,7 +593,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	view := m.View()
 
 	if m.showHelpModal {
-		if clickToken(msg, view, "[Close]") {
+		if m.clickAction(msg, view, "[Close]") {
 			m.showHelpModal = false
 		}
 		return m, nil
@@ -587,39 +601,58 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	if m.pendingProfileDelete != "" {
 		switch {
-		case clickToken(msg, view, "[Y] Delete"):
+		case m.clickAction(msg, view, "[Y] Delete"):
 			return m.handleProfileDeleteConfirmation(keyFromRune('y'))
-		case clickToken(msg, view, "[N] Cancel"):
+		case m.clickAction(msg, view, "[N] Cancel"):
 			return m.handleProfileDeleteConfirmation(keyFromRune('n'))
 		}
 		return m, nil
 	}
 
 	if m.pendingDelete != nil {
+		if m.deleteConfirmStage == 0 {
+			switch {
+			case m.clickAction(msg, view, "[Confirm]"):
+				return m.handleDeleteConfirmation(keyFromRune('y'))
+			case m.clickAction(msg, view, "[Cancel]"):
+				return m.handleDeleteConfirmation(keyFromRune('n'))
+			}
+			return m, nil
+		}
 		switch {
-		case clickToken(msg, view, "[Y] Delete"):
+		case m.clickAction(msg, view, "[Y] Delete"):
 			return m.handleDeleteConfirmation(keyFromRune('y'))
-		case clickToken(msg, view, "[N] Cancel"):
+		case m.clickAction(msg, view, "[N] Cancel"):
 			return m.handleDeleteConfirmation(keyFromRune('n'))
+		}
+		return m, nil
+	}
+
+	if m.pendingEditConfirm != "" {
+		switch {
+		case m.clickAction(msg, view, "[Confirm]"):
+			return m.handleEditConfirmation(keyFromRune('y'))
+		case m.clickAction(msg, view, "[Cancel]"):
+			return m.handleEditConfirmation(keyFromRune('n'))
 		}
 		return m, nil
 	}
 
 	if m.pendingCommand != nil {
 		switch {
-		case clickToken(msg, view, "[Y] Execute"):
+		case m.clickAction(msg, view, "[Y] Execute"):
 			return m.handleConfirmation(keyFromRune('y'))
-		case clickToken(msg, view, "[N] Cancel"):
+		case m.clickAction(msg, view, "[N] Cancel"):
 			return m.handleConfirmation(keyFromRune('n'))
 		}
 		return m, nil
 	}
 
 	if m.keyForm != nil {
-		if clickToken(msg, view, "[OK]") {
+		if m.clickAction(msg, view, "[OK]") {
 			return m.handleKeyFormKey(tea.KeyMsg{Type: tea.KeyEnter})
 		}
-		if clickToken(msg, view, "[Cancel]") {
+		if m.clickAction(msg, view, "[Cancel]") {
 			return m.handleKeyFormKey(tea.KeyMsg{Type: tea.KeyEsc})
 		}
 		for i, label := range m.keyForm.labels {
@@ -632,10 +665,10 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.profileIOForm != nil {
-		if clickToken(msg, view, "[OK]") {
+		if m.clickAction(msg, view, "[OK]") {
 			return m.handleProfileIOFormKey(tea.KeyMsg{Type: tea.KeyEnter})
 		}
-		if clickToken(msg, view, "[Cancel]") {
+		if m.clickAction(msg, view, "[Cancel]") {
 			return m.handleProfileIOFormKey(tea.KeyMsg{Type: tea.KeyEsc})
 		}
 		return m, nil
@@ -643,16 +676,16 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	if m.profileForm != nil {
 		for _, provider := range []string{"AWS", "GCP", "Azure", "Aliyun", "Tencent"} {
-			if clickToken(msg, view, "["+provider+"]") {
+			if m.clickAction(msg, view, "["+provider+"]") {
 				m.profileForm.applyCloudTemplate(provider)
 				m.setStatus("Applied " + provider + " template")
 				return m, nil
 			}
 		}
-		if clickToken(msg, view, "[Save]") {
+		if m.clickAction(msg, view, "[Save]") {
 			return m.handleProfileFormKey(tea.KeyMsg{Type: tea.KeyEnter})
 		}
-		if clickToken(msg, view, "[Cancel]") {
+		if m.clickAction(msg, view, "[Cancel]") {
 			return m.handleProfileFormKey(tea.KeyMsg{Type: tea.KeyEsc})
 		}
 		for i, label := range m.profileForm.labels {
@@ -672,7 +705,7 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	for i, item := range navItems {
-		if clickToken(msg, view, fmt.Sprintf("[%d %s]", i+1, item.String())) {
+		if m.clickAction(msg, view, fmt.Sprintf("[%d %s]", i+1, item.String())) {
 			m.setView(item)
 			return m, nil
 		}
@@ -681,11 +714,6 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	navStartY := 1
 	if msg.X >= 0 && msg.X < navWidth && msg.Y >= navStartY && msg.Y < navStartY+len(navItems) {
 		m.setView(navItems[msg.Y-navStartY])
-		return m, nil
-	}
-
-	if clickToken(msg, view, "[Help]") {
-		m.showHelpModal = true
 		return m, nil
 	}
 
@@ -705,46 +733,49 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch {
-		case clickToken(msg, view, "[Search]"):
+		case m.clickAction(msg, view, "[Search]"):
 			m.profileSearchMode = true
 			return m, m.profileSearch.Focus()
-		case clickToken(msg, view, "[Sort]"):
+		case m.clickAction(msg, view, "[Sort]"):
 			return m.handleConnectionsKey(keyFromRune('o'))
-		case clickToken(msg, view, "[Group]"):
+		case m.clickAction(msg, view, "[Group]"):
 			return m.handleConnectionsKey(keyFromRune('g'))
-		case clickToken(msg, view, "[Connect]"):
+		case m.clickAction(msg, view, "[Connect]"):
 			return m.handleConnectionsKey(tea.KeyMsg{Type: tea.KeyEnter})
-		case clickToken(msg, view, "[N new]"):
+		case m.clickAction(msg, view, "[N new]"):
 			return m.handleConnectionsKey(keyFromRune('n'))
-		case clickToken(msg, view, "[E edit]"):
+		case m.clickAction(msg, view, "[E edit]"):
 			return m.handleConnectionsKey(keyFromRune('e'))
-		case clickToken(msg, view, "[D delete]"):
+		case m.clickAction(msg, view, "[D delete]"):
 			return m.handleConnectionsKey(keyFromRune('d'))
-		case clickToken(msg, view, "[C clone]"):
+		case m.clickAction(msg, view, "[C clone]"):
 			return m.handleConnectionsKey(keyFromRune('c'))
-		case clickToken(msg, view, "[I import]"):
+		case m.clickAction(msg, view, "[I import]"):
 			return m.handleConnectionsKey(keyFromRune('i'))
-		case clickToken(msg, view, "[X export]"):
+		case m.clickAction(msg, view, "[X export]"):
 			return m.handleConnectionsKey(keyFromRune('x'))
-		case clickToken(msg, view, "[T test]"):
+		case m.clickAction(msg, view, "[T test]"):
 			return m.handleConnectionsKey(keyFromRune('t'))
-		case clickToken(msg, view, "[Test all]"):
+		case m.clickAction(msg, view, "[Test all]"):
 			return m.handleConnectionsKey(keyFromRune('a'))
 		}
 	case ViewKeys:
 		switch {
-		case clickToken(msg, view, "[Refresh]"):
+		case m.clickAction(msg, view, "[Refresh]"):
 			return m.handleKeysViewKey(keyFromRune('r'))
-		case clickToken(msg, view, "[Next]"):
+		case m.clickAction(msg, view, "[Next]"):
 			return m.handleKeysViewKey(keyFromRune('n'))
-		case clickToken(msg, view, "[New key]"):
+		case m.clickAction(msg, view, "[New key]"):
 			return m.handleKeysViewKey(keyFromRune('a'))
-		case clickToken(msg, view, "[Edit value]"):
+		case m.clickAction(msg, view, "[Edit value]"):
 			return m.handleKeysViewKey(keyFromRune('v'))
-		case clickToken(msg, view, "[Del]"):
+		case m.clickAction(msg, view, "[Del]"):
 			return m.handleKeysViewKey(keyFromRune('d'))
-		case clickToken(msg, view, "[Tree]"), clickToken(msg, view, "[Flat]"):
+		case m.clickAction(msg, view, "[Tree]"), m.clickAction(msg, view, "[Flat]"):
 			return m.handleKeysViewKey(keyFromRune('t'))
+		case m.clickAction(msg, view, "[Copy value]"):
+			m.setStatus(m.txt("Copied value"))
+			return m, copyValueCmd(m.selectedValue.Display(), m.generation)
 		}
 		for _, row := range m.visibleKeyRows() {
 			if row.expandable && clickLineContaining(msg, view, row.label+"/") {
@@ -763,10 +794,10 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case ViewWorkbench:
-		if clickToken(msg, view, "[Input]") {
+		if m.clickAction(msg, view, "[Input]") {
 			return m, m.commandInput.Focus()
 		}
-		if clickToken(msg, view, "[Execute]") {
+		if m.clickAction(msg, view, "[Execute]") {
 			return m.handleWorkbenchKey(tea.KeyMsg{Type: tea.KeyEnter})
 		}
 		for _, entry := range m.history.All() {
@@ -776,21 +807,42 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case ViewOps:
-		if clickToken(msg, view, "[Refresh]") {
+		if m.clickAction(msg, view, "[Refresh]") {
 			return m.handleOpsKey(keyFromRune('r'))
 		}
+	case ViewSettings:
+		switch {
+		case m.clickAction(msg, view, "[中文]"):
+			m.setLanguage("zh")
+			return m, nil
+		case m.clickAction(msg, view, "[English]"):
+			m.setLanguage("en")
+			return m, nil
+		case m.clickAction(msg, view, "[Aurora]"):
+			m.setTheme(themeAurora)
+			return m, nil
+		case m.clickAction(msg, view, "[Ember]"):
+			m.setTheme(themeEmber)
+			return m, nil
+		case m.clickAction(msg, view, "[Ocean]"):
+			m.setTheme(themeOcean)
+			return m, nil
+		case m.clickAction(msg, view, "[Graphite]"):
+			m.setTheme(themeGraphite)
+			return m, nil
+		}
 	case ViewStreams:
-		if clickToken(msg, view, "[Channel]") {
+		if m.clickAction(msg, view, "[Channel]") {
 			return m, m.streamInput.Focus()
 		}
 		switch {
-		case clickToken(msg, view, "[Sub]"):
+		case m.clickAction(msg, view, "[Sub]"):
 			return m.handleStreamsKey(keyFromRune('s'))
-		case clickToken(msg, view, "[Pub]"):
+		case m.clickAction(msg, view, "[Pub]"):
 			return m.handleStreamsKey(keyFromRune('p'))
-		case clickToken(msg, view, "[Monitor]"):
+		case m.clickAction(msg, view, "[Monitor]"):
 			return m.handleStreamsKey(keyFromRune('m'))
-		case clickToken(msg, view, "[Stop]"):
+		case m.clickAction(msg, view, "[Stop]"):
 			return m.handleStreamsKey(keyFromRune('x'))
 		}
 	}
@@ -1110,9 +1162,8 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Value editing supports string keys; found " + info.Type)
 			return m, nil
 		}
-		form := newKeyEditValueForm(info.Name, m.selectedValue.Display(), info.TTL)
-		m.keyForm = &form
-		m.setStatus("Edit value for " + info.Name)
+		m.pendingEditConfirm = info.Name
+		m.setStatus("Confirm edit for " + info.Name)
 		return m, nil
 	case 'k':
 		m.selectPreviousKey()
@@ -1134,6 +1185,7 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.selectedKey >= 0 && m.selectedKey < len(m.keys) {
 			m.pendingDelete = []string{m.keys[m.selectedKey].Name}
+			m.deleteConfirmStage = 0
 			m.setStatus("Confirm delete: press y or n")
 		}
 	}
@@ -1141,22 +1193,61 @@ func (m Model) handleKeysViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDeleteConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.Type == tea.KeyEsc {
+		m.pendingDelete = nil
+		m.deleteConfirmStage = 0
+		m.setStatus(m.txt("Delete cancelled"))
+		return m, nil
+	}
+	if msg.Type != tea.KeyRunes || len(msg.Runes) != 1 {
+		return m, nil
+	}
+	switch msg.Runes[0] {
+	case 'y', 'Y', 'd', 'D':
+		if m.deleteConfirmStage == 0 {
+			m.deleteConfirmStage = 1
+			m.setStatus(m.txt("Delete confirmed once; confirm again"))
+			return m, nil
+		}
+		keys := m.pendingDelete
+		m.pendingDelete = nil
+		m.deleteConfirmStage = 0
+		_ = m.auditRecord(append([]string{"DEL"}, keys...))
+		return m, deleteKeysCmd(m.adapter, keys, m.generation)
+	case 'n', 'N':
+		m.pendingDelete = nil
+		m.deleteConfirmStage = 0
+		m.setStatus(m.txt("Delete cancelled"))
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) handleEditConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	name := m.pendingEditConfirm
 	if msg.Type == tea.KeyRunes && len(msg.Runes) == 1 {
 		switch msg.Runes[0] {
-		case 'y', 'Y':
-			keys := m.pendingDelete
-			m.pendingDelete = nil
-			_ = m.auditRecord(append([]string{"DEL"}, keys...))
-			return m, deleteKeysCmd(m.adapter, keys, m.generation)
+		case 'y', 'Y', 'v', 'V':
+			m.pendingEditConfirm = ""
+			for _, info := range m.keys {
+				if info.Name == name {
+					form := newKeyEditValueForm(info.Name, m.selectedValue.Display(), info.TTL)
+					m.keyForm = &form
+					m.setStatus(m.txt("Edit value for ") + info.Name)
+					return m, nil
+				}
+			}
+			m.setStatus(m.txt("Key not found"))
+			return m, nil
 		case 'n', 'N':
-			m.pendingDelete = nil
-			m.setStatus("Delete cancelled")
+			m.pendingEditConfirm = ""
+			m.setStatus(m.txt("Edit cancelled"))
 			return m, nil
 		}
 	}
 	if msg.Type == tea.KeyEsc {
-		m.pendingDelete = nil
-		m.setStatus("Delete cancelled")
+		m.pendingEditConfirm = ""
+		m.setStatus(m.txt("Edit cancelled"))
 	}
 	return m, nil
 }

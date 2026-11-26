@@ -8,10 +8,11 @@ var navItems = []ViewID{
 	ViewWorkbench,
 	ViewOps,
 	ViewStreams,
+	ViewSettings,
 }
 
 func viewFromNumber(r rune) (ViewID, bool) {
-	if r < '1' || r > '5' {
+	if r < '1' || r > '6' {
 		return ViewConnections, false
 	}
 	idx := int(r - '1')

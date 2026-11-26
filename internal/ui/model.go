@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	goredis "github.com/redis/go-redis/v9"
 
@@ -23,6 +25,7 @@ const (
 	ViewWorkbench
 	ViewOps
 	ViewStreams
+	ViewSettings
 )
 
 func (v ViewID) String() string {
@@ -37,6 +40,8 @@ func (v ViewID) String() string {
 		return "Ops"
 	case ViewStreams:
 		return "Streams"
+	case ViewSettings:
+		return "Settings"
 	default:
 		return "Unknown"
 	}
@@ -50,6 +55,7 @@ type Model struct {
 	mouse         bool
 	status        string
 	showHelpModal bool
+	language      string
 
 	cfg                  config.Config
 	configPath           string
@@ -78,18 +84,20 @@ type Model struct {
 	lastResult           result.Value
 	pendingCommand       []string
 
-	keys            []adapters.KeyInfo
-	keyCursor       uint64
-	selectedKey     int
-	selectedValue   result.Value
-	filterInput     textinput.Model
-	filterMode      bool
-	pendingDelete   []string
-	keyForm         *keyForm
-	pendingKeyFocus string
-	keyTreeMode     bool
-	keyTreeExpanded map[string]bool
-	keyScroll       int
+	keys               []adapters.KeyInfo
+	keyCursor          uint64
+	selectedKey        int
+	selectedValue      result.Value
+	filterInput        textinput.Model
+	filterMode         bool
+	pendingDelete      []string
+	deleteConfirmStage int
+	pendingEditConfirm string
+	keyForm            *keyForm
+	pendingKeyFocus    string
+	keyTreeMode        bool
+	keyTreeExpanded    map[string]bool
+	keyScroll          int
 
 	opsManager     *ops.Manager
 	opsSnapshot    ops.Snapshot
@@ -110,6 +118,12 @@ func NewModel() Model {
 }
 
 func NewModelWithConfig(cfg config.Config, readOnly bool) Model {
+	language := strings.ToLower(strings.TrimSpace(cfg.Language))
+	if language != "en" {
+		language = "zh"
+	}
+	applyTheme(cfg.Theme)
+
 	input := textinput.New()
 	input.Placeholder = "SET greeting hello"
 	input.Prompt = "> "
@@ -143,7 +157,8 @@ func NewModelWithConfig(cfg config.Config, readOnly bool) Model {
 		height:          30,
 		activeView:      ViewConnections,
 		mouse:           true,
-		status:          "Ready",
+		status:          tr(language, "Ready"),
+		language:        language,
 		cfg:             cfg,
 		readOnly:        readOnly,
 		policy:          security.NewPolicy(readOnly),
@@ -175,6 +190,34 @@ func (m *Model) SetConfigPath(path string) {
 	m.configPath = path
 }
 
+func (m *Model) setLanguage(language string) {
+	if language != "en" {
+		language = "zh"
+	}
+	m.language = language
+	m.cfg.Language = language
+	if err := m.saveConfig(); err != nil {
+		m.setStatus("Save failed: " + err.Error())
+		return
+	}
+	m.setStatus(tr(language, "Language updated"))
+}
+
+func (m *Model) setTheme(theme string) {
+	switch theme {
+	case themeAurora, themeEmber, themeOcean, themeGraphite:
+	default:
+		theme = themeAurora
+	}
+	m.cfg.Theme = theme
+	applyTheme(theme)
+	if err := m.saveConfig(); err != nil {
+		m.setStatus(m.txt("Save failed: ") + err.Error())
+		return
+	}
+	m.setStatus(m.txt("Theme updated: ") + strings.ToUpper(theme))
+}
+
 func (m Model) Status() string { return m.status }
 
 func (m *Model) setStatus(status string) {
@@ -182,9 +225,9 @@ func (m *Model) setStatus(status string) {
 }
 
 func (m *Model) setView(view ViewID) {
-	if view < ViewConnections || view > ViewStreams {
+	if view < ViewConnections || view > ViewSettings {
 		return
 	}
 	m.activeView = view
-	m.setStatus(view.String() + " view")
+	m.setStatus(m.txt(view.String()) + " view")
 }

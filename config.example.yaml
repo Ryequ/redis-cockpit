@@ -1,4 +1,6 @@
 active_profile: local
+language: zh
+theme: aurora
 page_size: 100
 max_preview: 4096
 profiles:

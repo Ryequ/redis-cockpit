@@ -55,20 +55,16 @@ func (m Model) renderHeader(width int) string {
 	for i, view := range navItems {
 		label := fmt.Sprintf("[%d %s]", i+1, view.String())
 		if view == m.activeView {
-			label = "▸" + label
-			label = navActiveStyle.Render(label)
+			tabs = append(tabs, m.activeButton(label))
 		} else {
-			label = subtitleStyle.Render(label)
+			tabs = append(tabs, m.button(label))
 		}
-		tabs = append(tabs, label)
 	}
 	joined := lipgloss.JoinHorizontal(
 		lipgloss.Left,
 		titleStyle.Render(" Redis Cockpit "),
 		"  ",
 		strings.Join(tabs, " "),
-		"  ",
-		subtitleStyle.Render("[Help]"),
 	)
 	return runewidth.Truncate(stripANSI(joined), maxInt(width-2, 1), "…")
 }
@@ -76,7 +72,7 @@ func (m Model) renderHeader(width int) string {
 func (m Model) renderNav() string {
 	var b strings.Builder
 	for i, view := range navItems {
-		label := fmt.Sprintf("%d  %s", i+1, view.String())
+		label := fmt.Sprintf("%d  %s", i+1, m.viewName(view))
 		if view == m.activeView {
 			b.WriteString(navActiveStyle.Render("▸ " + label))
 		} else {
@@ -103,6 +99,8 @@ func (m Model) renderWorkspace(width, height int) string {
 		body = m.renderOpsBody()
 	case ViewStreams:
 		body = m.renderStreamsBody()
+	case ViewSettings:
+		body = m.renderSettingsBody()
 	default:
 		body = lipgloss.JoinVertical(
 			lipgloss.Left,
@@ -156,13 +154,13 @@ func (m Model) renderConnectionsBody() string {
 		"",
 		"Search: " + m.profileSearch.View(),
 		"",
-		subtitleStyle.Render("[Connect] [N new] [E edit] [D delete] [C clone] [I import] [X export] [T test] [Test all] [Search] [Sort] [Group]"),
+		m.buttonRow("[Connect]", "[N new]", "[E edit]", "[D delete]", "[C clone]", "[I import]", "[X export]", "[T test]", "[Test all]", "[Search]", "[Sort]", "[Group]"),
 		"",
 		"Profiles:",
 	}
 
 	if m.pendingProfileDelete != "" {
-		lines = append(lines, renderConfirmBox(
+		lines = append(lines, m.renderConfirmBox(
 			"Delete connection profile",
 			m.pendingProfileDelete,
 			"[Y] Delete",
@@ -208,7 +206,7 @@ func (m Model) renderConnectionsBody() string {
 			"  Auth   : "+authLabel(profile.Username, profile.Password),
 			"  Mode   : "+modeLabel(profile),
 			"",
-			"↑↓/j/k 选择  •  Enter 连接  •  n 新增  •  e 编辑  •  d 删除  •  t 测试  •  鼠标点击列表项选择",
+			m.txt("↑↓/j/k 选择  •  Enter 连接  •  n 新增  •  e 编辑  •  d 删除  •  t 测试  •  鼠标点击列表项选择"),
 		)
 	}
 	return strings.Join(lines, "\n")
@@ -221,7 +219,7 @@ func (m Model) renderWorkbenchBody() string {
 		subtitleStyle.Render(m.workspaceHint()),
 		"",
 		"Command:",
-		m.commandInput.View() + "  " + subtitleStyle.Render("[Input]") + "  " + okStyle.Render("[Execute]"),
+		m.commandInput.View() + "  " + m.buttonRow("[Input]", "[Execute]"),
 		"",
 		"History:",
 	}
@@ -239,7 +237,7 @@ func (m Model) renderWorkbenchBody() string {
 		redacted := strings.Join(security.RedactCommand(m.pendingCommand), " ")
 		lines = append(lines,
 			dangerStyle.Render("  Confirm critical command: "+redacted),
-			warnStyle.Render("  [Y] Execute   [N] Cancel"),
+			"  "+m.buttonRow("[Y] Execute", "[N] Cancel"),
 		)
 	} else {
 		lines = append(lines, result.Render(m.lastResult, result.FormatRaw))
@@ -258,7 +256,7 @@ func (m Model) renderKeysBody() string {
 		"",
 		"Filter: " + m.filterInput.View(),
 		"",
-		subtitleStyle.Render("[Refresh] [Next] [New key] [Edit value] [Del] " + keyViewToggleLabel(m)),
+		m.buttonRow(keyViewToggleLabel(m), "[New key]", "[Edit value]", "[Del]", "[Next]", "[Refresh]"),
 		"",
 		"Keys:",
 	}
@@ -269,10 +267,24 @@ func (m Model) renderKeysBody() string {
 		lines = append(lines, m.renderKeyRows())
 	}
 
-	lines = append(lines, "", "Value:")
-	if m.pendingDelete != nil {
-		lines = append(lines, renderConfirmBox(
-			"Confirm delete",
+	lines = append(lines, "", "Value:  "+m.button("[Copy value]"))
+	if m.pendingEditConfirm != "" {
+		lines = append(lines, m.renderConfirmBox(
+			"Edit key value",
+			m.pendingEditConfirm,
+			"[Confirm]",
+			"[Cancel]",
+		))
+	} else if m.pendingDelete != nil && m.deleteConfirmStage == 0 {
+		lines = append(lines, m.renderConfirmBox(
+			"Delete key?",
+			strings.Join(m.pendingDelete, ", "),
+			"[Confirm]",
+			"[Cancel]",
+		))
+	} else if m.pendingDelete != nil {
+		lines = append(lines, m.renderConfirmBox(
+			"Confirm delete permanently",
 			strings.Join(m.pendingDelete, ", "),
 			"[Y] Delete",
 			"[N] Cancel",
@@ -283,9 +295,9 @@ func (m Model) renderKeysBody() string {
 
 	nextPageHint := ""
 	if m.keyHasMore {
-		nextPageHint = "  •  n 下一页"
+		nextPageHint = m.txt("  •  n 下一页")
 	}
-	lines = append(lines, "", "↑↓/j/k 选择  •  Enter 查看值  •  a 新增 Key  •  v 修改 Value  •  t 树/平铺  •  ←/→ 折叠/展开  •  滚轮/PgUp/PgDn 滚动  •  / 筛选  •  r 刷新"+nextPageHint+"  •  d 删除")
+	lines = append(lines, "", m.txt("↑↓/j/k 选择  •  Enter 查看值  •  a 新增 Key  •  v 修改 Value  •  t 树/平铺  •  ←/→ 折叠/展开  •  滚轮/PgUp/PgDn 滚动  •  / 筛选  •  r 刷新")+nextPageHint+"  •  d 删除")
 	return strings.Join(lines, "\n")
 }
 
@@ -295,7 +307,7 @@ func (m Model) renderOpsBody() string {
 		"",
 		subtitleStyle.Render(m.workspaceHint()),
 		"",
-		subtitleStyle.Render("[Refresh]"),
+		m.buttonRow("[Refresh]"),
 		"",
 		"INFO:",
 	}
@@ -359,7 +371,7 @@ func (m Model) renderOpsBody() string {
 		"Modules: "+strings.Join(m.opsSnapshot.Modules, ", "),
 		"Role: "+m.opsSnapshot.Replication.Role,
 		"",
-		"r 刷新快照  •  脚本与事务可在 Workbench 中执行",
+		m.txt("r 刷新快照  •  脚本与事务可在 Workbench 中执行"),
 	)
 	return strings.Join(lines, "\n")
 }
@@ -370,9 +382,9 @@ func (m Model) renderStreamsBody() string {
 		"",
 		subtitleStyle.Render(m.workspaceHint()),
 		"",
-		"Channel: " + m.streamInput.View() + "  " + subtitleStyle.Render("[Channel]"),
+		"Channel: " + m.streamInput.View() + "  " + m.button("[Channel]"),
 		"",
-		subtitleStyle.Render("[Sub] [Pub] [Monitor] [Stop]"),
+		m.buttonRow("[Sub]", "[Pub]", "[Monitor]", "[Stop]"),
 		"",
 		"Pub/Sub:",
 	}
@@ -395,9 +407,9 @@ func (m Model) renderStreamsBody() string {
 
 	lines = append(lines,
 		"",
-		"Stream: 使用 Workbench 执行 XADD/XRANGE/XREAD 管理流条目。",
+		m.txt("Stream: 使用 Workbench 执行 XADD/XRANGE/XREAD 管理流条目。"),
 		"",
-		"s 订阅  •  p 发布测试消息  •  m 启动 MONITOR  •  x 停止  •  输入频道名",
+		m.txt("s 订阅  •  p 发布测试消息  •  m 启动 MONITOR  •  x 停止  •  输入频道名"),
 	)
 	return strings.Join(lines, "\n")
 }
@@ -459,15 +471,17 @@ func modeLabel(profile redis.ConnectionProfile) string {
 func (m Model) workspaceHint() string {
 	switch m.activeView {
 	case ViewConnections:
-		return "连接档案、认证、TLS、Cluster 与 Sentinel 将在此管理。"
+		return m.txt("连接档案、认证、TLS、Cluster 与 Sentinel 将在此管理。")
 	case ViewKeys:
-		return "使用 SCAN 分页浏览 Key，查看类型、TTL 与值预览。"
+		return m.txt("使用 SCAN 分页浏览 Key，查看类型、TTL 与值预览。")
 	case ViewWorkbench:
-		return "搜索命令、填写参数或执行原始 Redis 命令。"
+		return m.txt("搜索命令、填写参数或执行原始 Redis 命令。")
 	case ViewOps:
-		return "INFO、CONFIG、CLIENT、SLOWLOG 与复制状态。"
+		return m.txt("INFO、CONFIG、CLIENT、SLOWLOG 与复制状态。")
 	case ViewStreams:
-		return "Pub/Sub、MONITOR 与 Stream 实时消息流。"
+		return m.txt("Pub/Sub、MONITOR 与 Stream 实时消息流。")
+	case ViewSettings:
+		return m.txt("设置语言、主题和查看快捷键帮助。")
 	default:
 		return ""
 	}
@@ -476,9 +490,9 @@ func (m Model) workspaceHint() string {
 func (m Model) renderFooter(width int) string {
 	mouseHint := ""
 	if m.mouse {
-		mouseHint = "  •  Mouse Click 选择"
+		mouseHint = m.txt("  •  Mouse Click 选择")
 	}
-	text := "Tab/1-5 切换页面  •  ↑↓/hjkl 导航  •  Enter 确认  •  ? 帮助" + mouseHint + "  •  Ctrl+C 退出"
+	text := m.txt("Tab/1-6 切换页面  •  ↑↓/hjkl 导航  •  Enter 确认  •  ? 设置  •  Ctrl+C 退出") + mouseHint
 	footerWidth := maxInt(width, 80)
 	footerText := stripANSI(statusPrefix(m.status) + text)
 	footerText = runewidth.Truncate(footerText, maxInt(footerWidth-2, 1), "…")
@@ -487,18 +501,17 @@ func (m Model) renderFooter(width int) string {
 
 func (m Model) renderHelpModal() string {
 	lines := []string{
-		"Redis Cockpit 快捷键",
+		m.txt("Redis Cockpit 快捷键"),
 		"",
-		"1-5 / Tab / Shift+Tab   切换页面",
-		"↑↓ / j k                移动选择",
-		"Enter                   确认 / 执行",
-		"Esc                     返回 / 关闭",
-		"?                       显示帮助",
-		"Ctrl+C / Ctrl+Q         退出",
+		m.txt("1-6 / Tab / Shift+Tab   切换页面"),
+		m.txt("↑↓ / j k                移动选择"),
+		m.txt("Enter                   确认 / 执行"),
+		m.txt("Esc                     返回 / 关闭"),
+		m.txt("Ctrl+C / Ctrl+Q         退出"),
 		"",
-		"鼠标：点击顶部标签、左侧导航、按钮和列表项；滚轮滚动长结果。",
+		m.txt("鼠标：点击顶部标签、左侧导航、按钮和列表项；滚轮滚动长结果。"),
 		"",
-		"[Close]",
+		m.button("[Close]"),
 	}
 	modal := lipgloss.NewStyle().
 		Border(lipgloss.DoubleBorder()).
@@ -510,11 +523,48 @@ func (m Model) renderHelpModal() string {
 	return dangerStyle.Render(modal)
 }
 
-func renderConfirmBox(title, detail, yes, no string) string {
+func (m Model) renderSettingsBody() string {
+	languageButtons := []string{m.button("[中文]"), m.button("[English]")}
+	if m.language == "zh" {
+		languageButtons[0] = m.activeButton("▸[中文]")
+	} else {
+		languageButtons[1] = m.activeButton("▸[English]")
+	}
+	themeButtons := make([]string, 0, 4)
+	for _, name := range []string{themeAurora, themeEmber, themeOcean, themeGraphite} {
+		label := "[" + strings.ToUpper(name[:1]) + name[1:] + "]"
+		if m.cfg.Theme == name {
+			themeButtons = append(themeButtons, m.activeButton("▸"+label))
+		} else {
+			themeButtons = append(themeButtons, m.button(label))
+		}
+	}
+
+	return strings.Join([]string{
+		lipgloss.NewStyle().Bold(true).Foreground(accent).Render(m.txt("Settings")),
+		"",
+		m.txt("Language") + ": " + strings.Join(languageButtons, " "),
+		m.txt("当前语言") + ": " + map[string]string{"zh": m.txt("中文"), "en": m.txt("英文")}[m.language],
+		"",
+		m.txt("Theme") + ": " + strings.Join(themeButtons, " "),
+		m.txt("当前主题") + ": " + strings.ToUpper(m.cfg.Theme),
+		"",
+		m.txt("帮助") + " / " + m.txt("Shortcuts"),
+		m.txt("1-6 / Tab / Shift+Tab   切换页面"),
+		m.txt("↑↓ / j k                移动选择"),
+		m.txt("Enter                   确认 / 执行"),
+		m.txt("Esc                     返回 / 关闭"),
+		m.txt("Ctrl+C / Ctrl+Q         退出"),
+		"",
+		m.txt("鼠标：点击顶部标签、左侧导航、按钮和列表项；滚轮滚动长结果。"),
+	}, "\n")
+}
+
+func (m Model) renderConfirmBox(title, detail, yes, no string) string {
 	body := strings.Join([]string{
 		dangerStyle.Render(title),
 		detail,
-		warnStyle.Render(yes + "   " + no),
+		m.button(yes) + "   " + m.button(no),
 	}, "\n")
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

@@ -13,6 +13,8 @@ import (
 // Config is the persisted application configuration.
 type Config struct {
 	ActiveProfile string                    `yaml:"active_profile" json:"active_profile"`
+	Language      string                    `yaml:"language" json:"language"`
+	Theme         string                    `yaml:"theme" json:"theme"`
 	PageSize      int                       `yaml:"page_size" json:"page_size"`
 	MaxPreview    int                       `yaml:"max_preview" json:"max_preview"`
 	Profiles      []redis.ConnectionProfile `yaml:"profiles" json:"profiles"`
@@ -21,6 +23,8 @@ type Config struct {
 func Default() Config {
 	return Config{
 		ActiveProfile: "local",
+		Language:      "zh",
+		Theme:         "aurora",
 		PageSize:      100,
 		MaxPreview:    4096,
 		Profiles: []redis.ConnectionProfile{
@@ -57,6 +61,12 @@ func Load(path string) (Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("parse config %s: %w", path, err)
 	}
+	if cfg.Language == "" {
+		cfg.Language = "zh"
+	}
+	if cfg.Theme == "" {
+		cfg.Theme = "aurora"
+	}
 	if cfg.PageSize <= 0 {
 		cfg.PageSize = 100
 	}
@@ -68,6 +78,12 @@ func Load(path string) (Config, error) {
 
 // Save writes the config file, creating parent directories as needed.
 func Save(path string, cfg Config) error {
+	if cfg.Language == "" {
+		cfg.Language = "zh"
+	}
+	if cfg.Theme == "" {
+		cfg.Theme = "aurora"
+	}
 	if cfg.PageSize <= 0 {
 		cfg.PageSize = 100
 	}

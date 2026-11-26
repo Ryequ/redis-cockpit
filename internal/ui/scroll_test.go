@@ -24,7 +24,7 @@ func TestLargeKeyValueDoesNotScrollHeaderAway(t *testing.T) {
 	if len(lines) > m.height {
 		t.Fatalf("view has %d lines, terminal has %d", len(lines), m.height)
 	}
-	if !strings.Contains(stripANSI(lines[0]), "[3 Workbench]") {
+	if !strings.Contains(stripANSI(lines[0]), m.btnLabel("[3 Workbench]")) {
 		t.Fatalf("header is missing from first line: %q", stripANSI(lines[0]))
 	}
 }
@@ -37,7 +37,7 @@ func TestHeaderTabsRemainClickableAfterLargeValue(t *testing.T) {
 	m.keys = []adapters.KeyInfo{{Name: "large:key", Type: "string", TTL: -1}}
 	m.selectedValue = result.Normalize(strings.Repeat("line of value\n", 200))
 
-	next, _ := m.Update(clickTokenMsg(t, m, "[3 Workbench]"))
+	next, _ := m.Update(clickTokenMsg(t, m, m.btnLabel("[3 Workbench]")))
 	got := next.(Model)
 	if got.ActiveView() != ViewWorkbench {
 		t.Fatalf("active view = %v, want Workbench", got.ActiveView())
@@ -86,7 +86,7 @@ func TestHeaderFitsNarrowTerminalWidth(t *testing.T) {
 	if width := runewidth.StringWidth(header); width > m.width {
 		t.Fatalf("header width = %d, want <= %d: %q", width, m.width, header)
 	}
-	if !strings.Contains(header, "[3 Workbench]") {
+	if !strings.Contains(header, m.btnLabel("[3 Workbench]")) {
 		t.Fatalf("workbench tab was truncated away: %q", header)
 	}
 }

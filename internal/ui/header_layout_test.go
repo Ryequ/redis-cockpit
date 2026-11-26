@@ -19,7 +19,7 @@ func TestSmallWindowKeepsHeaderAfterConnectAndReturn(t *testing.T) {
 		t.Fatalf("view after connect = %v, want Keys", m.ActiveView())
 	}
 
-	next, _ := m.Update(clickTokenMsg(t, m, "[1 Connections]"))
+	next, _ := m.Update(clickTokenMsg(t, m, m.btnLabel("[1 Connections]")))
 	m = next.(Model)
 	if m.ActiveView() != ViewConnections {
 		t.Fatalf("view after return = %v, want Connections", m.ActiveView())
@@ -29,7 +29,7 @@ func TestSmallWindowKeepsHeaderAfterConnectAndReturn(t *testing.T) {
 	if len(lines) > m.height {
 		t.Fatalf("view has %d lines, terminal has %d", len(lines), m.height)
 	}
-	if !strings.Contains(stripANSI(lines[0]), "[1 Connections]") {
+	if !strings.Contains(stripANSI(lines[0]), m.btnLabel("[1 Connections]")) {
 		t.Fatalf("header missing after return: %q", stripANSI(lines[0]))
 	}
 }
@@ -45,7 +45,7 @@ func TestSmallWindowRangeKeepsHeaderAndFooter(t *testing.T) {
 		if len(lines) > height {
 			t.Fatalf("height %d: view has %d lines", height, len(lines))
 		}
-		if !strings.Contains(stripANSI(lines[0]), "[1 Connections]") {
+		if !strings.Contains(stripANSI(lines[0]), m.btnLabel("[1 Connections]")) {
 			t.Fatalf("height %d: header missing: %q", height, stripANSI(lines[0]))
 		}
 		last := stripANSI(lines[len(lines)-1])
@@ -61,7 +61,7 @@ func TestVerySmallWindowStillShowsHeaderTabs(t *testing.T) {
 	m.height = 5
 
 	view := m.View()
-	if !strings.Contains(stripANSI(view), "[1 Connections]") {
+	if !strings.Contains(stripANSI(view), m.btnLabel("[1 Connections]")) {
 		t.Fatalf("header tabs missing in very small window: %q", stripANSI(view))
 	}
 }
@@ -72,10 +72,10 @@ func TestActiveHeaderTabHasVisibleMarker(t *testing.T) {
 	m.setView(ViewWorkbench)
 
 	header := stripANSI(m.renderHeader(100))
-	if !strings.Contains(header, "▸[3 Workbench]") {
+	if !strings.Contains(header, "▸"+m.btnLabel("[3 Workbench]")) {
 		t.Fatalf("active tab marker missing: %q", header)
 	}
-	if strings.Contains(header, "▸[1 Connections]") {
+	if strings.Contains(header, "▸"+m.btnLabel("[1 Connections]")) {
 		t.Fatalf("inactive tab was marked active: %q", header)
 	}
 }

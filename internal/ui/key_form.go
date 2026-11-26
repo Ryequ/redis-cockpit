@@ -79,7 +79,7 @@ func (f keyForm) View() string {
 	if f.mode == keyFormEditValue {
 		title = "Edit Value: " + f.key
 	}
-	lines := []string{title, "", "[OK]  [Cancel]", ""}
+	lines := []string{title, "", buttonRow("[OK]", "[Cancel]"), ""}
 	for i, label := range f.labels {
 		marker := "  "
 		if i == f.focus {
