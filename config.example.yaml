@@ -1,0 +1,50 @@
+active_profile: local
+page_size: 100
+max_preview: 4096
+profiles:
+  - id: local
+    name: local
+    addr: 127.0.0.1:6379
+    username: ""
+    password: ""
+    db: 0
+    tls: false
+    insecure_skip_verify: false
+    cluster: false
+    sentinel: false
+    sentinel_addrs: []
+    master_name: ""
+    read_only: false
+    timeout_seconds: 5
+
+  - id: prod
+    name: prod
+    addr: redis.example.com:6379
+    username: default
+    password: ${REDIS_TUI_PASSWORD}
+    db: 0
+    tls: true
+    insecure_skip_verify: false
+    cluster: false
+    sentinel: false
+    sentinel_addrs: []
+    master_name: ""
+    read_only: true
+    timeout_seconds: 10
+
+  - id: sentinel
+    name: sentinel
+    addr: 127.0.0.1:26379
+    username: ""
+    password: ""
+    db: 0
+    tls: false
+    insecure_skip_verify: false
+    cluster: false
+    sentinel: true
+    sentinel_addrs:
+      - 127.0.0.1:26380
+      - 127.0.0.1:26381
+    master_name: mymaster
+    read_only: false
+    timeout_seconds: 5
