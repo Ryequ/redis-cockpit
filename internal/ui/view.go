@@ -23,23 +23,31 @@ const (
 
 func (m Model) View() string {
 	width := maxInt(m.width, 80)
+	header := m.renderHeader(width)
 	if m.height < 8 {
-		return lipgloss.NewStyle().Width(width).Render("Terminal too small")
+		lines := []string{header}
+		if m.height >= 2 {
+			lines = append(lines, "Terminal too small")
+		}
+		return truncateToViewport(strings.Join(lines, "\n"), maxInt(m.height, 1), width)
 	}
 	height := m.height
-
-	header := m.renderHeader(width)
 
 	left := m.renderNav()
 	center := m.renderWorkspace(width-navWidth-4, height-headerRows-footerRows-panelVerticalOverhead)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, center)
 	footer := m.renderFooter(width)
 
+	headerLineCount := len(strings.Split(header, "\n"))
+	footerLineCount := len(strings.Split(footer, "\n"))
+	bodyHeight := maxInt(height-headerLineCount-footerLineCount, 1)
+	body = truncateToViewport(body, bodyHeight, width)
+
 	screen := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 	if m.showHelpModal {
-		return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, m.renderHelpModal())
+		screen = lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, m.renderHelpModal())
 	}
-	return screen
+	return truncateToViewport(screen, height, width)
 }
 
 func (m Model) renderHeader(width int) string {
@@ -47,6 +55,7 @@ func (m Model) renderHeader(width int) string {
 	for i, view := range navItems {
 		label := fmt.Sprintf("[%d %s]", i+1, view.String())
 		if view == m.activeView {
+			label = "▸" + label
 			label = navActiveStyle.Render(label)
 		} else {
 			label = subtitleStyle.Render(label)

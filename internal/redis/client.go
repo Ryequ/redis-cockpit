@@ -207,6 +207,9 @@ func Probe(ctx context.Context, profile ConnectionProfile) (string, time.Duratio
 		return "", time.Since(start), fmt.Errorf("ping failed: %w", err)
 	}
 	latency := time.Since(start)
+	if latency <= 0 {
+		latency = time.Nanosecond
+	}
 
 	version := "unknown"
 	if info, err := client.Info(ctx, "server").Result(); err == nil {
